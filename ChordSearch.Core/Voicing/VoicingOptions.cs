@@ -20,7 +20,10 @@ public sealed class VoicingOptions
     /// <summary>Reject fretted counts above 4 unless a barre (repeated fret) is present.</summary>
     public bool RequireBarreForMoreThanFourFrets { get; set; } = true;
 
-    /// <summary>Reject span &gt; ComfortableSpan when there is no repeated-fret barre opportunity.</summary>
+    /// <summary>
+    /// Reject span &gt; ComfortableSpan for crowded shapes (4+ fretted notes) when there is no
+    /// repeated-fret barre at the lowest fretted fret. Sparse 2–3 note reaches defer to fingering.
+    /// </summary>
     public bool RequireBarreForWideSpan { get; set; } = true;
 
     /// <summary>Maximum fingering difficulty accepted after assignment (higher = harder).</summary>

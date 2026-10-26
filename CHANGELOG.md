@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.4
+
+### Changed
+- Replaced the rigid “sandwich gate” + scoring hacks with a real fingering playability search: assign fingers 1–4 by backtracking, hard-reject only when no legal assignment exists, then score difficulty.
+- Position-dependent stretch: tighter near the nut (~3 frets adjacent), larger toward fret 12+ (~6).
+- Barre clarity stays a hard constraint (no open/mute/lower fret under a multi-string finger).
+- True twisters (e.g. illegal barre over a lower intermediate with no alternate fingering) still reject; playable “pocket” grips like Em7 (`x-7-5-7-0-x`) assign and rank.
+- VoicingEngine wide-span barre requirement now applies only to crowded shapes (4+ fretted notes); sparse reaches defer to fingering.
+
+### Tests
+- Em7 pocket / wide-reach assignability and presence in search; illegal barre reject; open C / Em / F barre; position-stretch unit cases.
+
 ## 1.0.3
 
 ### Fixed

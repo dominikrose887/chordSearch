@@ -105,7 +105,7 @@ public class ChordBassAndFilterTests
     }
 
     [Fact]
-    public void PracticalFilter_NoExcessiveSpanWithoutBarre()
+    public void PracticalFilter_CrowdedWideSpan_RequiresLowBarre()
     {
         var response = new ChordSearchService(new VoicingOptions
         {
@@ -117,32 +117,52 @@ public class ChordBassAndFilterTests
         foreach (var r in response.Results)
         {
             if (r.Voicing.Span <= 3) continue;
-            // wide shapes need a repeated fret at the lowest fretted position
             var fretted = r.Voicing.Strings.Where(s => s.IsFretted).Select(s => s.Fret).ToList();
-            if (fretted.Count < 2) continue;
+            // Sparse 2–3 note reaches may be wide without a barre; fingering is the authority.
+            if (fretted.Count < 4) continue;
             var min = fretted.Min();
             Assert.True(fretted.Count(f => f == min) >= 2,
-                $"Wide span {r.Voicing.Span} without low-fret barre: {r.Voicing.ShapeKey}");
+                $"Crowded wide span {r.Voicing.Span} without low-fret barre: {r.Voicing.ShapeKey}");
         }
     }
 
     [Fact]
-    public void PracticalFilter_RejectsNotesBehindHigherBarre()
+    public void PracticalFilter_AcceptedResults_HaveLegalFingerSpans()
     {
-        // x x 5 5 1 x — mini-barre at 5 with a note at fret 1 behind it
         var response = new ChordSearchService().Search(
             new ChordSpec { Root = PitchClass.C, Quality = ChordQuality.Power },
             TuningPresets.StandardE);
 
-        Assert.DoesNotContain(response.Results, r => r.Voicing.ShapeKey == "-1--1-5-5-1--1");
-        Assert.DoesNotContain(response.Results, r => r.Voicing.ShapeKey == "-1--1-5-0-1--1");
-
-        foreach (var r in response.Results.Where(r => r.Voicing.Span > 3))
+        Assert.NotEmpty(response.Results);
+        foreach (var r in response.Results)
         {
-            var fretted = r.Voicing.Strings.Where(s => s.IsFretted).Select(s => s.Fret).ToList();
-            var min = fretted.Min();
-            Assert.True(fretted.Count(f => f == min) >= 2,
-                $"Accepted wide unbarre'd shape: {r.Voicing.ShapeKey}");
+            // Multi-string same finger ⇒ intermediates fretted at >= barre fret
+            var byFinger = new Dictionary<int, List<int>>();
+            for (var s = 0; s < r.Fingering.Fingers.Count; s++)
+            {
+                if (!r.Fingering.Fingers[s].IsAssigned) continue;
+                var finger = r.Fingering.Fingers[s].Value;
+                if (!byFinger.TryGetValue(finger, out var list))
+                {
+                    list = [];
+                    byFinger[finger] = list;
+                }
+                list.Add(s);
+            }
+
+            foreach (var (_, strings) in byFinger)
+            {
+                if (strings.Count < 2) continue;
+                var fret = r.Voicing.Strings[strings[0]].Fret;
+                var from = strings.Min();
+                var to = strings.Max();
+                for (var s = from; s <= to; s++)
+                {
+                    var sf = r.Voicing.Strings[s];
+                    Assert.False(sf.IsMuted || sf.IsOpen);
+                    Assert.True(sf.Fret >= fret);
+                }
+            }
         }
     }
 

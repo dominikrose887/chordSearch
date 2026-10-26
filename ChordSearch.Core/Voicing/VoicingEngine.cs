@@ -213,22 +213,34 @@ public sealed class VoicingEngine
         if (span > _options.AbsoluteMaxSpan)
             return false;
 
-        // Wide stretch without a low-fret barre is impractical
-        // (includes 2-finger stretches like fret 1 + fret 5 with opens in between)
+        // Wide stretch without a low-fret barre: hard-reject only crowded shapes (4+ fretted).
+        // Sparse 2–3 note reaches (e.g. Em7 x-7-12-12-0-x) defer to FingeringEngine.
         if (_options.RequireBarreForWideSpan
             && span > _options.ComfortableSpan
-            && frettedCount >= 2
+            && frettedCount >= 4
             && lowBarreCount < 2)
             return false;
 
-        score += span * 1.4;
-        if (span > _options.ComfortableSpan)
-            score += (span - _options.ComfortableSpan) * 4.0;
+        // Sparse wide reaches are musically useful; only gently penalize excess span so they
+        // can still rank. Crowded shapes keep the steeper stretch cost.
+        if (frettedCount <= 3)
+        {
+            var excess = Math.Max(0, span - _options.ComfortableSpan);
+            score += span * 0.15 + excess * 0.45;
+        }
+        else
+        {
+            score += span * 1.4;
+            if (span > _options.ComfortableSpan)
+                score += (span - _options.ComfortableSpan) * 4.0;
+        }
 
+        // Mild position cost — mid-neck grips should still surface in top results.
         if (minF is > 0)
-            score += minF.Value * 0.08;
+            score += minF.Value * 0.03;
 
-        score -= frets.Count(f => f == 0) * 0.4;
+        // Cap open-string reward so open forms don't completely drown fretted voicings.
+        score -= Math.Min(3, frets.Count(f => f == 0)) * 0.2;
         score += Math.Max(0, sounding - covered.Count) * 0.25;
         score += formula.PitchClasses.Count(pc => !covered.Contains(pc)) * 1.1;
         score -= barreBonus * 0.7;

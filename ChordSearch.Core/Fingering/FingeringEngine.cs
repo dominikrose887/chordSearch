@@ -2,9 +2,20 @@ using ChordSearch.Core.Voicing;
 
 namespace ChordSearch.Core.Fingering;
 
+/// <summary>
+/// Searches for a physically playable finger assignment (1=index … 4=pinky).
+/// Shapes with no legal assignment are rejected (null); playable shapes get a difficulty score.
+/// </summary>
 public sealed class FingeringEngine
 {
-    private const int MaxFingerStretch = 3; // frets between finger N and N+1 comfortably; absolute checked separately
+    /// <summary>Hard ceiling on fret span; beyond this no hand assignment is attempted.</summary>
+    private const int AbsoluteMaxAssignableSpan = 6;
+
+    /// <summary>Bound backtracking: stop after this many complete legal assignments scored.</summary>
+    private const int MaxSolutionsToScore = 48;
+
+    /// <summary>Bound node expansions in the search tree.</summary>
+    private const int MaxSearchNodes = 8_000;
 
     public ChordFingering? Assign(ChordVoicing voicing)
     {
@@ -29,150 +40,237 @@ public sealed class FingeringEngine
             };
         }
 
-        var barres = DetectBarres(fretted, voicing.StringCount);
-        var best = FindBestAssignment(voicing, fretted, barres);
-        return best;
-    }
-
-    private static List<BarreSegment> DetectBarres(List<(int String, int Fret)> fretted, int stringCount)
-    {
-        var barres = new List<BarreSegment>();
-        var byFret = fretted.GroupBy(f => f.Fret).OrderBy(g => g.Key);
-
-        foreach (var group in byFret)
-        {
-            var strings = group.Select(g => g.String).OrderBy(s => s).ToList();
-            // Find contiguous runs of length >= 2
-            var runStart = 0;
-            for (var i = 1; i <= strings.Count; i++)
-            {
-                var unbroken = i < strings.Count && strings[i] == strings[i - 1] + 1;
-                if (unbroken) continue;
-
-                var runLen = i - runStart;
-                if (runLen >= 2)
-                {
-                    barres.Add(new BarreSegment
-                    {
-                        Fret = group.Key,
-                        Finger = 1, // typically index; may be remapped
-                        FromString = strings[runStart],
-                        EndString = strings[i - 1]
-                    });
-                }
-                runStart = i;
-            }
-        }
-
-        // Prefer the lowest fret barre as primary (classic barre chords)
-        return barres.OrderBy(b => b.Fret).ThenByDescending(b => b.EndString - b.FromString).ToList();
-    }
-
-    private ChordFingering? FindBestAssignment(
-        ChordVoicing voicing,
-        List<(int String, int Fret)> fretted,
-        List<BarreSegment> barres)
-    {
         var minFret = fretted.Min(f => f.Fret);
         var maxFret = fretted.Max(f => f.Fret);
         var span = maxFret - minFret;
-
-        if (span > 6)
+        if (span > AbsoluteMaxAssignableSpan)
             return null;
 
-        // Only barres with a clear span: no open/mute/lower-fret notes under the finger.
-        var usableBarres = barres
-            .Where(b => BarreSpanClearOfLowerNotes(voicing, b.FromString, b.EndString, b.Fret))
-            .ToList();
+        // Average fretted fret drives position-dependent stretch limits.
+        var avgFret = fretted.Average(f => (double)f.Fret);
 
-        ChordFingering? best = null;
-        foreach (var primaryBarre in usableBarres.Select(b => (BarreSegment?)b).Append(null))
+        // All fretted notes on one fret → classic barre with finger 1 when the span is clear.
+        if (fretted.Select(f => f.Fret).Distinct().Count() == 1)
         {
-            var coveredByBarre = new HashSet<int>();
-            if (primaryBarre is not null)
+            var fret = fretted[0].Fret;
+            var minS = fretted.Min(f => f.String);
+            var maxS = fretted.Max(f => f.String);
+            if (BarreSpanClearOfLowerNotes(voicing, minS, maxS, fret))
             {
-                for (var s = primaryBarre.FromString; s <= primaryBarre.EndString; s++)
-                {
-                    if (voicing.Strings[s].Fret == primaryBarre.Fret)
-                        coveredByBarre.Add(s);
-                }
+                var assignment = new int[voicing.StringCount];
+                foreach (var (s, _) in fretted)
+                    assignment[s] = 1;
+                return BuildFingering(voicing, assignment, avgFret);
             }
-
-            var remaining = fretted
-                .Where(f => !coveredByBarre.Contains(f.String))
-                .OrderBy(f => f.Fret)
-                .ThenBy(f => f.String)
-                .ToList();
-
-            // Finger 1 reserved for barre if present
-            var availableFingers = primaryBarre is not null
-                ? new[] { 2, 3, 4 }
-                : new[] { 1, 2, 3, 4 };
-
-            if (remaining.Count > availableFingers.Length)
-                continue;
-
-            AssignRemaining(
-                voicing,
-                remaining,
-                availableFingers,
-                0,
-                new int[voicing.StringCount],
-                primaryBarre,
-                coveredByBarre,
-                minFret,
-                ref best);
         }
 
-        if (best is null)
-            best = TryBruteForce(voicing, fretted, minFret);
+        // Search bass → treble; prefer index-ward fingers on thick strings.
+        var ordered = fretted.OrderBy(f => f.String).ToList();
+        var assignmentSearch = new int[voicing.StringCount];
+        ChordFingering? best = null;
+        var nodes = 0;
+        var solutions = 0;
+
+        Search(
+            voicing,
+            ordered,
+            index: 0,
+            assignmentSearch,
+            avgFret,
+            ref best,
+            ref nodes,
+            ref solutions);
 
         return best;
     }
 
-    private void AssignRemaining(
+    private static void Search(
         ChordVoicing voicing,
-        List<(int String, int Fret)> remaining,
-        int[] fingers,
+        List<(int String, int Fret)> notes,
         int index,
         int[] assignment,
-        BarreSegment? barre,
-        HashSet<int> barreStrings,
-        int minFret,
-        ref ChordFingering? best)
+        double avgFret,
+        ref ChordFingering? best,
+        ref int nodes,
+        ref int solutions)
     {
-        if (index == remaining.Count)
+        if (solutions >= MaxSolutionsToScore || nodes >= MaxSearchNodes)
+            return;
+
+        if (index == notes.Count)
         {
-            var fingering = BuildFingering(voicing, assignment, barre, barreStrings, minFret);
-            if (fingering is null) return;
-            if (best is null || fingering.DifficultyScore < best.DifficultyScore)
-                best = fingering;
+            nodes++;
+            var built = BuildFingering(voicing, assignment, avgFret);
+            if (built is null)
+                return;
+
+            solutions++;
+            if (best is null || built.DifficultyScore < best.DifficultyScore)
+                best = built;
             return;
         }
 
-        var (str, fret) = remaining[index];
-        foreach (var finger in fingers)
+        nodes++;
+        if (nodes >= MaxSearchNodes)
+            return;
+
+        var (str, fret) = notes[index];
+        foreach (var finger in CandidateFingers(index, notes.Count, assignment, voicing, str, fret))
         {
-            if (assignment.Contains(finger))
-            {
-                // Same finger only allowed on the same fret (barre / mini-barre)
-                var existing = Array.IndexOf(assignment, finger);
-                if (existing >= 0 && voicing.Strings[existing].Fret != fret)
-                    continue;
-
-                // Extending a multi-string finger: span must not trap lower frets / mutes / opens
-                if (!MultiStringFingerSpanOk(voicing, assignment, finger, str, fret))
-                    continue;
-            }
-
-            // Stretch vs lower fingers already placed
-            if (!StretchOk(voicing, assignment, str, fret, finger, minFret))
+            if (!PlacementLegal(voicing, assignment, str, fret, finger, avgFret))
                 continue;
 
             assignment[str] = finger;
-            AssignRemaining(voicing, remaining, fingers, index + 1, assignment, barre, barreStrings, minFret, ref best);
+            Search(voicing, notes, index + 1, assignment, avgFret, ref best, ref nodes, ref solutions);
             assignment[str] = 0;
+
+            if (solutions >= MaxSolutionsToScore || nodes >= MaxSearchNodes)
+                return;
         }
+    }
+
+    /// <summary>
+    /// Prefer lower (index-ward) fingers for bass-side notes and pinky-ward for treble.
+    /// Legal same-fret barre extensions are tried early so full barre chords are found
+    /// before the search budget is spent on impossible dedicated-finger trees.
+    /// </summary>
+    private static IEnumerable<int> CandidateFingers(
+        int noteIndex,
+        int noteCount,
+        int[] assignment,
+        ChordVoicing voicing,
+        int str,
+        int fret)
+    {
+        // Ideal finger from bass→treble progression across fretted notes.
+        var ideal = noteCount <= 1
+            ? 1
+            : 1 + (int)Math.Round(noteIndex * 3.0 / (noteCount - 1));
+        ideal = Math.Clamp(ideal, 1, 4);
+
+        var used = new HashSet<int>();
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            if (assignment[s] != 0)
+                used.Add(assignment[s]);
+        }
+
+        // Same-fret finger already placed → legal barre candidate when span is clear.
+        int? barreFinger = null;
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            if (assignment[s] == 0) continue;
+            if (voicing.Strings[s].Fret != fret) continue;
+            if (MultiStringFingerSpanOk(voicing, assignment, assignment[s], str, fret))
+            {
+                barreFinger = assignment[s];
+                break;
+            }
+        }
+
+        var notesAtFret = 0;
+        for (var s = 0; s < voicing.StringCount; s++)
+        {
+            if (voicing.Strings[s].Fret == fret)
+                notesAtFret++;
+        }
+
+        var ranked = new List<(int Finger, int Rank)>();
+        for (var f = 1; f <= 4; f++)
+        {
+            var rank = Math.Abs(f - ideal) * 10;
+            if (used.Contains(f) && f != barreFinger)
+                continue; // finger already on a different fret
+
+            if (barreFinger == f)
+            {
+                // Prefer barre when many notes share the fret (classic barre chords);
+                // otherwise keep it as a fallback after dedicated fingers.
+                rank += notesAtFret >= 3 ? -40 : 15;
+            }
+            else if (!used.Contains(f))
+            {
+                rank -= 3;
+            }
+
+            ranked.Add((f, rank));
+        }
+
+        return ranked.OrderBy(x => x.Rank).Select(x => x.Finger);
+    }
+
+    private static bool PlacementLegal(
+        ChordVoicing voicing,
+        int[] assignment,
+        int str,
+        int fret,
+        int finger,
+        double avgFret)
+    {
+        // One finger, one fret.
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            if (assignment[s] != finger) continue;
+            if (voicing.Strings[s].Fret != fret)
+                return false;
+        }
+
+        // Extending a multi-string finger → barre span must be clear.
+        if (!MultiStringFingerSpanOk(voicing, assignment, finger, str, fret))
+            return false;
+
+        // Finger order vs fret: lower finger number ⇒ same or lower fret.
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            var other = assignment[s];
+            if (other == 0 || other == finger) continue;
+            var otherFret = voicing.Strings[s].Fret;
+            if (finger < other && fret > otherFret)
+                return false;
+            if (finger > other && fret < otherFret)
+                return false;
+        }
+
+        // Position-dependent stretch vs already placed fingers.
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            var other = assignment[s];
+            if (other == 0) continue;
+            var otherFret = voicing.Strings[s].Fret;
+            if (!StretchOk(finger, fret, other, otherFret, avgFret))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Adjacent-finger fret span: ~3 near the nut, scaling to ~6 by fret 12+.
+    /// Non-adjacent fingers get +1 fret allowance per skipped finger.
+    /// </summary>
+    public static double MaxAdjacentStretch(double positionFret)
+    {
+        var t = Math.Clamp(positionFret / 12.0, 0.0, 1.0);
+        return 3.0 + t * 3.0; // 3 at nut … 6 at 12+
+    }
+
+    /// <summary>Extra frets allowed per skipped finger; smaller near the nut.</summary>
+    public static double SkipStretch(double positionFret)
+    {
+        var t = Math.Clamp(positionFret / 12.0, 0.0, 1.0);
+        return 0.25 + t * 0.75; // ~0.25 near nut … 1.0 at 12+
+    }
+
+    public static bool StretchOk(int fingerA, int fretA, int fingerB, int fretB, double positionFret)
+    {
+        if (fingerA == fingerB)
+            return fretA == fretB;
+
+        var fingerDelta = Math.Abs(fingerA - fingerB);
+        var fretDelta = Math.Abs(fretA - fretB);
+        var maxAdj = MaxAdjacentStretch(positionFret);
+        var maxAllowed = maxAdj + (fingerDelta - 1) * SkipStretch(positionFret);
+        return fretDelta <= maxAllowed + 1e-9;
     }
 
     /// <summary>
@@ -194,6 +292,9 @@ public sealed class FingeringEngine
             if (assignment[s] == finger)
                 strings.Add(s);
         }
+
+        if (strings.Count < 2)
+            return true;
 
         return BarreSpanClearOfLowerNotes(voicing, strings.Min(), strings.Max(), barreFret);
     }
@@ -224,31 +325,62 @@ public sealed class FingeringEngine
     }
 
     /// <summary>
-    /// Reject shapes where a fretted note is trapped: higher frets sound on both the
-    /// bass-side and treble-side of that string. You cannot plant a finger behind that gate.
+    /// True-twister check: a finger sitting behind higher frets on both bass and treble
+    /// sides is only legal as a clean “pocket” (Em7-style). Extra notes at intermediate
+    /// frets outside that pocket (e.g. A@8 with D@9 / G@7 / B@9) make the shape unplayable.
     /// </summary>
-    private static bool NoNoteSandwichedBehindHigherFrets(ChordVoicing voicing)
+    private static bool PocketGeometryOk(ChordVoicing voicing, int[] assignment)
     {
-        for (var s = 0; s < voicing.StringCount; s++)
+        for (var s = 0; s < assignment.Length; s++)
         {
-            if (!voicing.Strings[s].IsFretted) continue;
+            if (assignment[s] == 0) continue;
             var fret = voicing.Strings[s].Fret;
 
-            var bassSideHigher = false;
+            var bassHigher = false;
+            var trebleHigher = false;
+            var peak = fret;
             for (var b = 0; b < s; b++)
             {
-                if (voicing.Strings[b].IsFretted && voicing.Strings[b].Fret > fret)
+                if (!voicing.Strings[b].IsFretted) continue;
+                if (voicing.Strings[b].Fret > fret)
                 {
-                    bassSideHigher = true;
-                    break;
+                    bassHigher = true;
+                    peak = Math.Max(peak, voicing.Strings[b].Fret);
                 }
             }
 
-            if (!bassSideHigher) continue;
-
             for (var t = s + 1; t < voicing.StringCount; t++)
             {
-                if (voicing.Strings[t].IsFretted && voicing.Strings[t].Fret > fret)
+                if (!voicing.Strings[t].IsFretted) continue;
+                if (voicing.Strings[t].Fret > fret)
+                {
+                    trebleHigher = true;
+                    peak = Math.Max(peak, voicing.Strings[t].Fret);
+                }
+            }
+
+            if (!bassHigher || !trebleHigher)
+                continue;
+
+            // Pocket finger must be the lowest-numbered among the sandwich region.
+            var pocketFinger = assignment[s];
+            for (var o = 0; o < assignment.Length; o++)
+            {
+                if (assignment[o] == 0) continue;
+                var of = voicing.Strings[o].Fret;
+                if (of <= fret) continue;
+                // side notes at higher frets
+                if ((o < s || o > s) && assignment[o] <= pocketFinger)
+                    return false;
+            }
+
+            // No fretted note at an intermediate fret outside the pocket string.
+            for (var o = 0; o < voicing.StringCount; o++)
+            {
+                if (o == s) continue;
+                if (!voicing.Strings[o].IsFretted) continue;
+                var of = voicing.Strings[o].Fret;
+                if (of > fret && of < peak)
                     return false;
             }
         }
@@ -256,115 +388,14 @@ public sealed class FingeringEngine
         return true;
     }
 
-    private static bool StretchOk(
-        ChordVoicing voicing,
-        int[] assignment,
-        int str,
-        int fret,
-        int finger,
-        int minFret)
-    {
-        for (var s = 0; s < assignment.Length; s++)
-        {
-            var otherFinger = assignment[s];
-            if (otherFinger == 0) continue;
-            var otherFret = voicing.Strings[s].Fret;
-            if (otherFret <= 0) continue;
-
-            var fingerDelta = Math.Abs(finger - otherFinger);
-            var fretDelta = Math.Abs(fret - otherFret);
-
-            // Same finger different fret impossible (unless barre — not here)
-            if (finger == otherFinger && fret != otherFret)
-                return false;
-
-            // Adjacent fingers: at most MaxFingerStretch frets apart
-            if (fingerDelta == 1 && fretDelta > MaxFingerStretch)
-                return false;
-
-            // Non-adjacent: allow roughly one extra fret per skipped finger
-            if (fingerDelta > 1 && fretDelta > MaxFingerStretch + (fingerDelta - 1))
-                return false;
-
-            // Crossing: higher finger on lower fret is awkward
-            if (finger > otherFinger && fret < otherFret - 1)
-                return false;
-            if (finger < otherFinger && fret > otherFret + 1)
-                return false;
-        }
-
-        // Prefer finger 1 near min fret when no barre
-        if (finger == 1 && fret > minFret + 1)
-            return false;
-
-        return true;
-    }
-
-    private ChordFingering? TryBruteForce(
-        ChordVoicing voicing,
-        List<(int String, int Fret)> fretted,
-        int minFret)
-    {
-        // Greedy: sort by fret then assign lowest available finger
-        var assignment = new int[voicing.StringCount];
-        var used = new HashSet<int>();
-        var ordered = fretted.OrderBy(f => f.Fret).ThenBy(f => f.String).ToList();
-
-        // Detect if all at same fret → full barre with finger 1
-        if (ordered.Select(o => o.Fret).Distinct().Count() == 1)
-        {
-            var fret = ordered[0].Fret;
-            var minS = ordered.Min(o => o.String);
-            var maxS = ordered.Max(o => o.String);
-            for (var s = minS; s <= maxS; s++)
-            {
-                if (voicing.Strings[s].Fret == fret)
-                    assignment[s] = 1;
-            }
-
-            return BuildFingering(voicing, assignment, new BarreSegment
-            {
-                Fret = fret,
-                Finger = 1,
-                FromString = minS,
-                EndString = maxS
-            }, Enumerable.Range(minS, maxS - minS + 1).ToHashSet(), minFret);
-        }
-
-        foreach (var (str, fret) in ordered)
-        {
-            var relative = fret - minFret;
-            var preferred = Math.Clamp(relative + 1, 1, 4);
-            var chosen = 0;
-            for (var delta = 0; delta <= 3; delta++)
-            {
-                foreach (var cand in new[] { preferred + delta, preferred - delta }.Where(c => c is >= 1 and <= 4))
-                {
-                    if (used.Contains(cand)) continue;
-                    if (!StretchOk(voicing, assignment, str, fret, cand, minFret)) continue;
-                    chosen = cand;
-                    break;
-                }
-                if (chosen != 0) break;
-            }
-
-            if (chosen == 0)
-                return null;
-
-            assignment[str] = chosen;
-            used.Add(chosen);
-        }
-
-        return BuildFingering(voicing, assignment, null, [], minFret);
-    }
-
     private static ChordFingering? BuildFingering(
         ChordVoicing voicing,
         int[] assignment,
-        BarreSegment? barre,
-        HashSet<int> barreStrings,
-        int minFret)
+        double avgFret)
     {
+        if (!PocketGeometryOk(voicing, assignment))
+            return null;
+
         var fingers = new FingerId[voicing.StringCount];
         for (var s = 0; s < voicing.StringCount; s++)
         {
@@ -374,19 +405,13 @@ public sealed class FingeringEngine
                 continue;
             }
 
-            if (barre is not null && barreStrings.Contains(s) && voicing.Strings[s].Fret == barre.Fret)
-            {
-                fingers[s] = new FingerId(barre.Finger);
-                continue;
-            }
-
             if (assignment[s] == 0)
                 return null;
 
             fingers[s] = new FingerId(assignment[s]);
         }
 
-        // Validate no finger used on two different frets; multi-string fingers need a clear barre span
+        // Validate one-finger-one-fret + barre spans.
         var fingerFrets = new Dictionary<int, int>();
         var fingerStrings = new Dictionary<int, List<int>>();
         for (var s = 0; s < fingers.Length; s++)
@@ -405,70 +430,88 @@ public sealed class FingeringEngine
             list.Add(s);
         }
 
+        var barres = new List<BarreSegment>();
         foreach (var (finger, strings) in fingerStrings)
         {
             if (strings.Count < 2) continue;
             var fret = fingerFrets[finger];
             if (!BarreSpanClearOfLowerNotes(voicing, strings.Min(), strings.Max(), fret))
                 return null;
+
+            barres.Add(new BarreSegment
+            {
+                Fret = fret,
+                Finger = finger,
+                FromString = strings.Min(),
+                EndString = strings.Max()
+            });
         }
 
-        // A fretted note cannot sit behind a higher-fret "gate" on both sides
-        // (fingers further up the neck on lower AND higher strings trap it).
-        if (!NoNoteSandwichedBehindHigherFrets(voicing))
-            return null;
-
-        // Crossing penalty / difficulty
-        double difficulty = voicing.Span * 1.5;
-        difficulty += minFret * 0.05;
-
-        if (barre is not null)
-        {
-            var width = barre.EndString - barre.FromString + 1;
-            difficulty += width * 0.4; // barre is harder with width
-            difficulty -= 0.5; // but often the correct shape
-        }
-
-        // Finger stretch costs
+        // Final stretch pass (pairs).
         var placed = Enumerable.Range(0, fingers.Length)
             .Where(s => fingers[s].IsAssigned)
             .Select(s => (Finger: fingers[s].Value, Fret: voicing.Strings[s].Fret, String: s))
             .OrderBy(p => p.Finger)
             .ToList();
 
-        for (var i = 0; i < placed.Count - 1; i++)
-        {
-            var a = placed[i];
-            var b = placed[i + 1];
-            if (b.Finger == a.Finger) continue;
-            var fretDelta = Math.Abs(b.Fret - a.Fret);
-            var fingerDelta = b.Finger - a.Finger;
-            if (fingerDelta > 0 && fretDelta > fingerDelta + 1)
-                difficulty += (fretDelta - fingerDelta) * 1.2;
-        }
-
-        // Hard reject extreme stretches that slipped past StretchOk
         for (var i = 0; i < placed.Count; i++)
         {
             for (var j = i + 1; j < placed.Count; j++)
             {
-                var fingerDelta = Math.Abs(placed[i].Finger - placed[j].Finger);
-                var fretDelta = Math.Abs(placed[i].Fret - placed[j].Fret);
-                if (fingerDelta == 1 && fretDelta > MaxFingerStretch)
-                    return null;
-                if (fingerDelta > 1 && fretDelta > MaxFingerStretch + (fingerDelta - 1))
+                if (!StretchOk(placed[i].Finger, placed[i].Fret, placed[j].Finger, placed[j].Fret, avgFret))
                     return null;
             }
         }
 
-        var barres = barre is null ? Array.Empty<BarreSegment>() : new[] { barre };
+        var difficulty = ScoreDifficulty(voicing, placed, barres, avgFret);
 
         return new ChordFingering
         {
             Fingers = fingers,
             Barres = barres,
             DifficultyScore = difficulty,
-            Notes = barre is null ? null : $"Barre fret {barre.Fret}"
+            Notes = barres.Count == 0 ? null : $"Barre fret {barres[0].Fret}"
         };
+    }
+
+    private static double ScoreDifficulty(
+        ChordVoicing voicing,
+        List<(int Finger, int Fret, int String)> placed,
+        List<BarreSegment> barres,
+        double avgFret)
+    {
+        // Em7 (5+7+7+open) should land medium/easy — not hard.
+        var distinctFingers = placed.Select(p => p.Finger).Distinct().Count();
+        double difficulty = voicing.Span * 0.2;
+        difficulty += distinctFingers * 0.15;
+        difficulty += avgFret * 0.02;
+
+        foreach (var barre in barres)
+        {
+            var width = barre.EndString - barre.FromString + 1;
+            difficulty += width * 0.2;
+            if (barre.Finger == 1)
+                difficulty -= 0.5; // index barre is the standard comfortable form
+        }
+
+        for (var i = 0; i < placed.Count - 1; i++)
+        {
+            var a = placed[i];
+            var b = placed[i + 1];
+            if (b.Finger == a.Finger) continue;
+
+            var fretDelta = Math.Abs(b.Fret - a.Fret);
+            var fingerDelta = Math.Max(1, b.Finger - a.Finger);
+            var stringDelta = Math.Abs(b.String - a.String);
+
+            if (fretDelta > fingerDelta)
+                difficulty += (fretDelta - fingerDelta) * 0.35;
+
+            // Wide string skip with stretch, especially higher on the neck.
+            if (stringDelta >= 2 && fretDelta >= 2)
+                difficulty += 0.15 * stringDelta * (1.0 + avgFret / 24.0);
+        }
+
+        return Math.Max(0, difficulty);
     }
 }

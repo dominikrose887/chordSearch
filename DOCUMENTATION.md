@@ -2,7 +2,7 @@
 
 Personal desktop tool for building guitar chords, finding playable voicings across the neck, inspecting fingerings on a fretboard, and previewing them over MIDI.
 
-**Version:** 1.0.3  
+**Version:** 1.0.4  
 **Platform:** Windows 10/11 (x64), unpackaged WinUI 3 app  
 **Audience:** solo / personal use (not an enterprise-deployed product)
 
@@ -23,8 +23,10 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 - Results ranked easiest → harder; cooperative **cancellation** when the chord changes quickly.
 
 ### Fingering
-- Assigns fingers with barre detection, stretch limits, and adjacent-finger rules.
-- Shapes that cannot be fingered cleanly are dropped from results.
+- Searches for a legal assignment of fingers 1–4 (open/muted strings use none).
+- Hard rules: one finger one fret; multi-string same finger must clear the barre span; stretch limits grow with neck position.
+- Does not reject a shape only because a lower fret sits between higher frets — it tries rearrangements (e.g. Em7 pocket grips). If no assignment works, the shape is dropped.
+- Playable shapes get a difficulty score (span, finger count, barre width, stretch).
 
 ### Fretboard & diagrams
 - Interactive fretboard: inlays, X/O, finger numbers, barre bars, note names.
@@ -118,9 +120,9 @@ These are intentional product/engineering choices for a **personal** Windows too
    Composing from root/quality/extensions covers altered chords without maintaining a huge name table. Naming is derived (`ChordNamer`).
 
 3. **Playability over completeness**  
-   Wide stretches without a low-fret barre, impossible fingerings, and non-contiguous mutes are rejected or heavily penalized. Some theoretically valid shapes (e.g. awkward F forms) may be omitted — preferred over listing unplayable junk.  
+   `FingeringEngine` is the authority for playability: it searches finger assignments and drops shapes with none. Crowded wide stretches without a low barre may still be rejected in voicing; sparse 2–3 note reaches defer to fingering. Non-contiguous mutes are rejected. Some awkward shapes may be omitted — preferred over listing unplayable junk.  
    **Barre span rule:** one finger on several strings at the same fret presses every string in between. Intermediate strings may not be open, muted, or fretted closer to the nut than the barre fret (notes in front of the barre are OK).  
-   **Sandwich rule:** a fretted note cannot sit behind higher frets on both its bass-side and treble-side strings.
+   **Pocket / twister:** a lower fret between higher frets on both sides is allowed when a clean pocket fingering exists (index in the valley, outer fingers on the peaks). Extra intermediate frets that block every assignment still reject (true twister).
 
 4. **Windowed search**  
    Sliding windows + per-window caps keep search latency acceptable on a full neck while still finding open and high positions.
@@ -183,15 +185,15 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 Build installer + portable zip (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.3
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.4
 ```
 
 Artifacts under `artifacts\`:
 
 | File | Purpose |
 |------|---------|
-| `ChordSearch-Setup-1.0.3.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
-| `ChordSearch-1.0.3-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
+| `ChordSearch-Setup-1.0.4.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
+| `ChordSearch-1.0.4-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
 
 ### Installed vs portable data
 
