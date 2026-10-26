@@ -37,5 +37,7 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 ## Publish (release zip)
 
 ```powershell
-dotnet publish ChordSearch.App/ChordSearch.App.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 -p:Version=1.0.0
+dotnet publish ChordSearch.App/ChordSearch.App.csproj -c Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:SelfContained=true -p:Version=1.0.1
 ```
+
+> **Note:** Unpackaged WinUI needs `EnableMsixTooling=true` plus `.pri`/`.xbf` in the publish folder. Without those, the exe exits immediately (`Cannot locate resource ms-appx:///MainWindow.xaml`).

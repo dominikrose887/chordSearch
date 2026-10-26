@@ -2,7 +2,7 @@
 
 Personal desktop tool for building guitar chords, finding playable voicings across the neck, inspecting fingerings on a fretboard, and previewing them over MIDI.
 
-**Version:** 1.0.0  
+**Version:** 1.0.1  
 **Platform:** Windows 10/11 (x64), unpackaged WinUI 3 app  
 **Audience:** solo / personal use (not an enterprise-deployed product)
 

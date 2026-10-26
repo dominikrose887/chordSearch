@@ -11,27 +11,24 @@
     <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <!-- Unpackaged: runs without Windows Developer Mode / MSIX sideload -->
+    <!-- Unpackaged: runs without Windows Developer Mode / MSIX sideload.
+         EnableMsixTooling must stay true so .pri/.xbf are wired into publish
+         (otherwise LoadComponent fails with ms-appx:///MainWindow.xaml). -->
     <WindowsPackageType>None</WindowsPackageType>
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <EnableMsixTooling>true</EnableMsixTooling>
     <EnableWinAppRunSupport>false</EnableWinAppRunSupport>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\AppIcon.ico" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -82,4 +79,27 @@
     <!-- WinUI + NAudio break under aggressive trimming; keep off for Release publish. -->
     <PublishTrimmed>False</PublishTrimmed>
   </PropertyGroup>
+
+  <!--
+    Belt-and-suspenders: unpackaged WinUI publish historically omits app .pri / .xbf
+    (WindowsAppSDK #6720 / #6394). Copy from build output into PublishDir after publish.
+  -->
+  <Target Name="CopyUnpackagedXamlResources" AfterTargets="Publish">
+    <PropertyGroup>
+      <_XamlOutDir Condition="'$(OutDir)' != ''">$(OutDir)</_XamlOutDir>
+      <_XamlOutDir Condition="'$(_XamlOutDir)' == ''">$(OutputPath)</_XamlOutDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_XamlResources Include="$(_XamlOutDir)**\*.xbf" />
+      <_XamlResources Include="$(_XamlOutDir)$(AssemblyName).pri" Condition="Exists('$(_XamlOutDir)$(AssemblyName).pri')" />
+      <_XamlResources Include="$(ProjectPriFullPath)" Condition="'$(ProjectPriFullPath)' != '' and Exists('$(ProjectPriFullPath)')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_XamlResources)"
+          DestinationFiles="@(_XamlResources->'$(PublishDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_XamlResources)' != ''" />
+    <Message Importance="High"
+             Text="CopyUnpackagedXamlResources: copied @(_XamlResources->Count()) XAML resource file(s) to $(PublishDir)"
+             Condition="'@(_XamlResources)' != ''" />
+  </Target>
 </Project>

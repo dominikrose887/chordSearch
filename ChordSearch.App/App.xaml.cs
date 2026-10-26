@@ -1,4 +1,5 @@
-﻿using ChordSearch.App.Diagnostics;
+﻿using System.Runtime.InteropServices;
+using ChordSearch.App.Diagnostics;
 using Microsoft.UI.Xaml;
 
 namespace ChordSearch.App;
@@ -24,6 +25,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             AppLog.Fatal("App ctor InitializeComponent failed", ex);
+            ShowStartupFailure("Chord Search failed to start", ex);
             throw;
         }
     }
@@ -41,6 +43,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             AppLog.Fatal("OnLaunched failed", ex);
+            ShowStartupFailure("Chord Search failed to open the main window", ex);
             throw;
         }
     }
@@ -48,6 +51,7 @@ public partial class App : Application
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         AppLog.Fatal($"UI UnhandledException: {e.Message}", e.Exception);
+        ShowStartupFailure("Chord Search hit an unexpected error", e.Exception);
 
 #if DEBUG
         // Keep process alive in Debug so the log can be inspected after a UI fault.
@@ -68,4 +72,25 @@ public partial class App : Application
         AppLog.Fatal("UnobservedTaskException", e.Exception);
         e.SetObserved();
     }
+
+    /// <summary>Win32 message box so unpackaged startup failures are visible (no silent exit).</summary>
+    private static void ShowStartupFailure(string title, Exception? ex)
+    {
+        try
+        {
+            var logHint = string.IsNullOrEmpty(AppLog.LogFilePath)
+                ? "%LocalAppData%\\ChordSearch\\logs"
+                : AppLog.LogFilePath;
+            var detail = ex?.Message ?? "Unknown error";
+            var text = $"{detail}\n\nLog:\n{logHint}";
+            _ = MessageBoxW(IntPtr.Zero, text, title, 0x00000010); // MB_ICONERROR
+        }
+        catch
+        {
+            // never throw from error UI
+        }
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }
