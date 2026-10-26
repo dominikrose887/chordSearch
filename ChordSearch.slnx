@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ChordSearch.App/ChordSearch.App.csproj" />
+  <Project Path="ChordSearch.Core.Tests/ChordSearch.Core.Tests.csproj" />
+  <Project Path="ChordSearch.Core/ChordSearch.Core.csproj" />
+  <Project Path="ChordSearch.Midi/ChordSearch.Midi.csproj" />
+</Solution>

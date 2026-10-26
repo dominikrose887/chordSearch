@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+logs/
+.vs/
+*.user
+*.suo
+*.cache
+[Dd]ebug/
+[Rr]elease/
+*.appx
+*.msix
+*.msixbundle
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.pri
+*.pdb

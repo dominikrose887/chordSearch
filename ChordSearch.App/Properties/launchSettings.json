@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ChordSearch.App (Unpackaged)": {
+      "commandName": "Project"
+    },
+    "ChordSearch.App (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}
