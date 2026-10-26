@@ -1,0 +1,3 @@
+Chord Search portable mode.
+Presence of this file makes the app store settings, tunings, and logs under .\Data\
+next to the executable (instead of %LocalAppData%\ChordSearch).

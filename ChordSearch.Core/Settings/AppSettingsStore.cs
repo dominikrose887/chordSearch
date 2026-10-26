@@ -15,11 +15,16 @@ public sealed class AppSettingsStore
 
     public AppSettingsStore(string? directory = null)
     {
-        var dir = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ChordSearch");
-        Directory.CreateDirectory(dir);
-        _path = Path.Combine(dir, "settings.json");
+        if (directory is not null)
+        {
+            Directory.CreateDirectory(directory);
+            _path = Path.Combine(directory, "settings.json");
+        }
+        else
+        {
+            _path = AppPaths.SettingsPath;
+            Directory.CreateDirectory(AppPaths.Root);
+        }
     }
 
     public AppSettings Current { get; private set; } = new();

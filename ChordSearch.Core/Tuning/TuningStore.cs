@@ -16,10 +16,7 @@ public sealed class TuningStore
 
     public TuningStore(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ChordSearch",
-            "tunings");
+        _directory = directory ?? AppPaths.TuningsDirectory;
     }
 
     /// <summary>Fresh copies of built-in presets — never the shared static instances.</summary>

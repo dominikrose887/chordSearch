@@ -1,0 +1,9 @@
+Chord Search 1.0.2
+
+Choose an install folder on the next page (Program Files, a custom folder, etc.).
+An uninstaller is registered automatically (Settings > Apps, or Start Menu).
+
+MIDI preview needs a Windows MIDI output device (e.g. Microsoft GS Wavetable Synth).
+
+For a no-install portable copy, use the portable zip from GitHub Releases instead
+(run ChordSearch.App.exe next to portable.txt — settings stay in a Data folder beside the exe).

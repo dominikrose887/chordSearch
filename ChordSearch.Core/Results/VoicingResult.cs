@@ -44,6 +44,12 @@ public sealed class VoicingResult
 
     public IReadOnlyList<Pitch?> SoundingPitches(GuitarTuning tuning)
     {
+        ArgumentNullException.ThrowIfNull(tuning);
+        if (Voicing.StringCount != tuning.StringCount)
+            throw new ArgumentException(
+                $"Voicing has {Voicing.StringCount} strings but tuning has {tuning.StringCount}.",
+                nameof(tuning));
+
         var result = new Pitch?[Voicing.StringCount];
         for (var i = 0; i < Voicing.StringCount; i++)
         {

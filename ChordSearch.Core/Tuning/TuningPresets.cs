@@ -64,6 +64,19 @@ public static class TuningPresets
         ],
         "preset-half-down");
 
+    /// <summary>Standard E transposed down 4 semitones (C F Bb Eb G C).</summary>
+    public static GuitarTuning StandardC { get; } = new(
+        "Standard C",
+        [
+            Pitch.FromNote(PitchClass.C, 2),
+            Pitch.FromNote(PitchClass.F, 2),
+            Pitch.FromNote(PitchClass.As, 2),
+            Pitch.FromNote(PitchClass.Ds, 3),
+            Pitch.FromNote(PitchClass.G, 3),
+            Pitch.FromNote(PitchClass.C, 4)
+        ],
+        "preset-standard-c");
+
     public static GuitarTuning BassStandard { get; } = new(
         "Bass Standard",
         [
@@ -89,6 +102,6 @@ public static class TuningPresets
 
     public static IReadOnlyList<GuitarTuning> All { get; } =
     [
-        StandardE, DropD, OpenG, OpenD, HalfStepDown, BassStandard, SevenStringStandard
+        StandardE, StandardC, DropD, OpenG, OpenD, HalfStepDown, BassStandard, SevenStringStandard
     ];
 }

@@ -2,7 +2,7 @@
 
 Personal desktop tool for building guitar chords, finding playable voicings across the neck, inspecting fingerings on a fretboard, and previewing them over MIDI.
 
-**Version:** 1.0.1  
+**Version:** 1.0.2  
 **Platform:** Windows 10/11 (x64), unpackaged WinUI 3 app  
 **Audience:** solo / personal use (not an enterprise-deployed product)
 
@@ -178,37 +178,30 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 
 ## Release package
 
-Published artifact: **self-contained win-x64** folder, zipped for GitHub Releases.
+Build installer + portable zip (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
-dotnet publish ChordSearch.App/ChordSearch.App.csproj `
-  -c Release -p:Platform=x64 -p:PublishProfile=win-x64 `
-  -p:Version=1.0.0
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.2
 ```
 
-Typical output:
+Artifacts under `artifacts\`:
 
-`ChordSearch.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\publish\`
+| File | Purpose |
+|------|---------|
+| `ChordSearch-Setup-1.0.2.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
+| `ChordSearch-1.0.2-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
 
-The release zip includes:
+### Installed vs portable data
 
-- `ChordSearch.App.exe` and dependencies  
-- `Install-ChordSearch.ps1` — copies to `%LocalAppData%\Programs\ChordSearch` and creates a Start Menu shortcut  
-- `INSTALL.txt` — short install / uninstall notes  
+| Mode | Settings / tunings / logs |
+|------|---------------------------|
+| Installer | `%LocalAppData%\ChordSearch\` |
+| Portable (`portable.txt` present) | `{app}\Data\` |
 
-### Install (from release zip)
+### Uninstall (installer build)
 
-1. Download `ChordSearch-1.0.0-win-x64.zip` from GitHub Releases.  
-2. Unzip, then either:
-   - Run **`Install-ChordSearch.ps1`** (recommended), or  
-   - Run `ChordSearch.App.exe` directly from the extracted folder.  
-3. If PowerShell blocks the script:  
-   `powershell -ExecutionPolicy Bypass -File .\Install-ChordSearch.ps1`
-
-### Uninstall
-
-Delete `%LocalAppData%\Programs\ChordSearch` and the Start Menu shortcut.  
-Optional: remove `%LocalAppData%\ChordSearch` to clear settings, tunings, and logs.
+Windows **Settings → Apps**, or the Start Menu **Uninstall Chord Search** entry.  
+User data under LocalAppData is left in place (delete manually if desired).
 
 ---
 

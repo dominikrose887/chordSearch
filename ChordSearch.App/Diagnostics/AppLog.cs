@@ -18,10 +18,7 @@ public static class AppLog
         if (_initialized) return;
         _initialized = true;
 
-        var localLogs = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ChordSearch",
-            "logs");
+        var localLogs = ChordSearch.Core.IO.AppPaths.LogsDirectory;
         Directory.CreateDirectory(localLogs);
 
         LogDirectory = localLogs;

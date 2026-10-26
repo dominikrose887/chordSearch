@@ -1,31 +1,24 @@
-Chord Search 1.0.1 - Windows x64 (portable / self-contained)
-============================================================
+Chord Search 1.0.2 - Windows x64
+================================
 
-Install
--------
-1. Right-click Install-ChordSearch.ps1 -> Run with PowerShell
-   or:  powershell -ExecutionPolicy Bypass -File .\Install-ChordSearch.ps1
+Option A - Installer (recommended)
+----------------------------------
+Run ChordSearch-Setup-1.0.2.exe
+- Pick the install folder
+- Start Menu shortcut + uninstaller are created
+- Remove via Windows Settings > Apps, or the Start Menu uninstall entry
 
-2. The app is copied to:
-   %LocalAppData%\Programs\ChordSearch
-
-3. A Start Menu shortcut "Chord Search" is created.
-
-Alternatively, run ChordSearch.App.exe from this folder without installing.
-
-Uninstall
----------
-- Delete %LocalAppData%\Programs\ChordSearch
-- Delete the Start Menu shortcut "Chord Search"
-- Optional: delete %LocalAppData%\ChordSearch (settings, tunings, logs)
+Option B - Portable (no install)
+--------------------------------
+1. Unzip ChordSearch-*-win-x64-portable.zip anywhere
+2. Keep portable.txt next to ChordSearch.App.exe
+3. Run ChordSearch.App.exe
+   Settings / tunings / logs are stored in a Data folder beside the exe.
 
 Requirements
 ------------
-- Windows 10 or 11, 64-bit
-- No separate .NET install needed (self-contained)
-- MIDI device optional
+- Windows 10/11 x64
+- Self-contained (no separate .NET install)
+- MIDI device optional (for Play / Arpeggio)
 
-The package must include ChordSearch.App.pri and *.xbf next to the exe.
-Without those, WinUI cannot load MainWindow.xaml.
-
-Docs: https://github.com/dominikrose887/chordSearch (DOCUMENTATION.md)
+Docs: https://github.com/dominikrose887/chordSearch

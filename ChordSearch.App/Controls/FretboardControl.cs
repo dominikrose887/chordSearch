@@ -229,7 +229,15 @@ public sealed class FretboardControl : UserControl
 
         var tuning = Tuning;
         if (tuning is null || tuning.StringCount < 1)
+        {
+            Place(new TextBlock
+            {
+                Text = "No tuning selected",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Color.FromArgb(200, 220, 220, 220))
+            }, 16, 16);
             return;
+        }
 
         var maxFret = Math.Clamp(MaxFret, 12, 24);
         var scale = ScaleLengthMm > 0 ? ScaleLengthMm : FretGeometry.StandardScaleLengthMm;

@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject
     private int _searchVersion;
     private bool _suppressTuningSearch;
     private bool _suppressSettingsPersist;
+    private bool _restoringTuning;
     private DispatcherQueue? _dispatcher;
 
     public MainViewModel(IMidiPlayer? midi = null)
@@ -311,7 +312,15 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnActiveTuningChanged(GuitarTuning value)
     {
-        if (value is null) return;
+        // WinUI ComboBox TwoWay clears SelectedItem (null) when the ItemsSource
+        // collection replaces an item by reference — never leave ActiveTuning null.
+        if (value is null)
+        {
+            if (_restoringTuning) return;
+            RestoreActiveTuningSelection();
+            return;
+        }
+
         AppLog.Info($"ActiveTuning changed -> {value.Name} ({value.StringCount} strings)");
         StringCount = value.StringCount;
         TuningName = value.Name;
@@ -321,6 +330,28 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex) { AppLog.Error("SaveActive failed", ex); }
         if (!_suppressTuningSearch)
             _ = RunSearchAsync();
+    }
+
+    private void RestoreActiveTuningSelection()
+    {
+        var preferredId = _tuningStore.ActiveTuning?.Id;
+        var fallback = AvailableTunings.FirstOrDefault(t => preferredId is not null && t.Id == preferredId)
+                       ?? AvailableTunings.FirstOrDefault()
+                       ?? _tuningStore.ActiveTuning;
+        if (fallback is null) return;
+
+        _restoringTuning = true;
+        _suppressTuningSearch = true;
+        try
+        {
+            ActiveTuning = fallback;
+            AppLog.Warn($"ActiveTuning was cleared by UI binding — restored '{fallback.Name}'");
+        }
+        finally
+        {
+            _suppressTuningSearch = false;
+            _restoringTuning = false;
+        }
     }
 
     [RelayCommand]
@@ -378,15 +409,26 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (ActiveTuning is null)
+        {
+            RestoreActiveTuningSelection();
+            if (ActiveTuning is null)
+            {
+                StatusText = "No tuning selected";
+                return;
+            }
+        }
+
         try
         {
             AppLog.Info($"PlayChord: {ChordName} shape={SelectedResult.Voicing.ShapeKey}");
             await _midi.PlayChordAsync(SelectedResult, ActiveTuning);
+            StatusText = $"{Results.Count} voicings";
         }
         catch (Exception ex)
         {
             AppLog.Error("PlayChord failed", ex);
-            StatusText = "Playback error";
+            StatusText = "Playback error: " + ex.Message;
         }
     }
 
@@ -394,6 +436,12 @@ public partial class MainViewModel : ObservableObject
     private async Task PlayArpeggioAsync()
     {
         if (SelectedResult is null || !_midi.IsAvailable) return;
+        if (ActiveTuning is null)
+        {
+            RestoreActiveTuningSelection();
+            if (ActiveTuning is null) return;
+        }
+
         try
         {
             AppLog.Info($"PlayArpeggio: {ChordName}");
@@ -402,6 +450,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             AppLog.Error("PlayArpeggio failed", ex);
+            StatusText = "Playback error: " + ex.Message;
         }
     }
 
@@ -467,20 +516,27 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+            if (ActiveTuning is null)
+            {
+                RestoreActiveTuningSelection();
+                if (ActiveTuning is null)
+                    throw new InvalidOperationException("No active tuning.");
+            }
+
             var name = string.IsNullOrWhiteSpace(TuningName) ? ActiveTuning.Name : TuningName.Trim();
             var pitches = TuningStrings.Select(row => Pitch.FromNote(row.PitchClass, row.Octave)).ToArray();
+            if (pitches.Length is < 4 or > 8)
+                throw new InvalidOperationException("Tuning must have 4–8 strings.");
+
             var updated = new GuitarTuning(name, pitches, ActiveTuning.Id);
-            // Avoid re-entrancy storms: assign then persist without duplicate search from partial
+            // Update list first, then select — avoids ComboBox clearing SelectedItem to null.
+            ReplaceTuningInList(updated);
+            _suppressTuningSearch = true;
+            ActiveTuning = updated;
+            _suppressTuningSearch = false;
             _tuningStore.SetActive(updated);
             _tuningStore.SaveActive();
-            ActiveTuning = updated;
-            if (AvailableTunings.All(t => t.Id != updated.Id))
-                AvailableTunings.Insert(0, updated);
-            else
-            {
-                var idx = AvailableTunings.ToList().FindIndex(t => t.Id == updated.Id);
-                if (idx >= 0) AvailableTunings[idx] = updated;
-            }
+            _ = RunSearchAsync();
         }
         catch (Exception ex)
         {
@@ -495,10 +551,17 @@ public partial class MainViewModel : ObservableObject
         try
         {
             ApplyTuningFromEditor();
+            if (ActiveTuning is null)
+                throw new InvalidOperationException("No active tuning to save.");
+
             var saved = ActiveTuning.Clone(ActiveTuning.Name);
             _tuningStore.SaveUserTuning(saved);
             if (AvailableTunings.All(t => t.Id != saved.Id))
                 AvailableTunings.Add(saved);
+            // Select the newly saved copy so ComboBox has a matching reference
+            _suppressTuningSearch = true;
+            ActiveTuning = saved;
+            _suppressTuningSearch = false;
             StatusText = $"Saved tuning '{saved.Name}'.";
         }
         catch (Exception ex)

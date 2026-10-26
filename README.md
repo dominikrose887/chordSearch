@@ -6,7 +6,10 @@ WinUI 3 (.NET 10) desktop app for building guitar chords, finding playable voici
 
 ## Download
 
-Get the latest **win-x64** zip from [GitHub Releases](https://github.com/dominikrose887/chordSearch/releases). Unzip and run `Install-ChordSearch.ps1`, or launch `ChordSearch.App.exe` directly.
+Get the latest release from [GitHub Releases](https://github.com/dominikrose887/chordSearch/releases):
+
+- **`ChordSearch-Setup-*.exe`** — normal installer (choose folder, Start Menu, uninstall)
+- **`ChordSearch-*-portable.zip`** — portable (keep `portable.txt` next to the exe; data stays in `.\Data`)
 
 ## Solution
 
