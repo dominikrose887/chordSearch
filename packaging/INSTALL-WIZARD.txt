@@ -1,4 +1,4 @@
-Chord Search 1.0.2
+Chord Search 1.0.3
 
 Choose an install folder on the next page (Program Files, a custom folder, etc.).
 An uninstaller is registered automatically (Settings > Apps, or Start Menu).

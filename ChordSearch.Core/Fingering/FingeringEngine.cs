@@ -80,9 +80,9 @@ public sealed class FingeringEngine
         if (span > 6)
             return null;
 
-        // Only barres with no fretted notes behind them are usable (can't fret nut-side of index).
+        // Only barres with a clear span: no open/mute/lower-fret notes under the finger.
         var usableBarres = barres
-            .Where(b => fretted.All(f => f.Fret >= b.Fret))
+            .Where(b => BarreSpanClearOfLowerNotes(voicing, b.FromString, b.EndString, b.Fret))
             .ToList();
 
         ChordFingering? best = null;
@@ -155,9 +155,13 @@ public sealed class FingeringEngine
         {
             if (assignment.Contains(finger))
             {
-                // Same finger only allowed on the same fret (mini-barre)
+                // Same finger only allowed on the same fret (barre / mini-barre)
                 var existing = Array.IndexOf(assignment, finger);
                 if (existing >= 0 && voicing.Strings[existing].Fret != fret)
+                    continue;
+
+                // Extending a multi-string finger: span must not trap lower frets / mutes / opens
+                if (!MultiStringFingerSpanOk(voicing, assignment, finger, str, fret))
                     continue;
             }
 
@@ -169,6 +173,87 @@ public sealed class FingeringEngine
             AssignRemaining(voicing, remaining, fingers, index + 1, assignment, barre, barreStrings, minFret, ref best);
             assignment[str] = 0;
         }
+    }
+
+    /// <summary>
+    /// One finger fretting several strings at the same fret acts as a barre across the
+    /// full span. Intermediate strings cannot sit closer to the nut (lower fret), be open,
+    /// or be muted — the barre finger would press them at the barre fret.
+    /// Notes in front of the barre (higher frets) are fine.
+    /// </summary>
+    private static bool MultiStringFingerSpanOk(
+        ChordVoicing voicing,
+        int[] assignment,
+        int finger,
+        int newString,
+        int barreFret)
+    {
+        var strings = new List<int> { newString };
+        for (var s = 0; s < assignment.Length; s++)
+        {
+            if (assignment[s] == finger)
+                strings.Add(s);
+        }
+
+        return BarreSpanClearOfLowerNotes(voicing, strings.Min(), strings.Max(), barreFret);
+    }
+
+    /// <summary>
+    /// Every string between <paramref name="fromString"/> and <paramref name="endString"/>
+    /// (inclusive) must be fretted at >= <paramref name="barreFret"/>.
+    /// </summary>
+    private static bool BarreSpanClearOfLowerNotes(
+        ChordVoicing voicing,
+        int fromString,
+        int endString,
+        int barreFret)
+    {
+        if (fromString > endString)
+            (fromString, endString) = (endString, fromString);
+
+        for (var s = fromString; s <= endString; s++)
+        {
+            var sf = voicing.Strings[s];
+            if (sf.IsMuted || sf.IsOpen)
+                return false;
+            if (sf.Fret < barreFret)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Reject shapes where a fretted note is trapped: higher frets sound on both the
+    /// bass-side and treble-side of that string. You cannot plant a finger behind that gate.
+    /// </summary>
+    private static bool NoNoteSandwichedBehindHigherFrets(ChordVoicing voicing)
+    {
+        for (var s = 0; s < voicing.StringCount; s++)
+        {
+            if (!voicing.Strings[s].IsFretted) continue;
+            var fret = voicing.Strings[s].Fret;
+
+            var bassSideHigher = false;
+            for (var b = 0; b < s; b++)
+            {
+                if (voicing.Strings[b].IsFretted && voicing.Strings[b].Fret > fret)
+                {
+                    bassSideHigher = true;
+                    break;
+                }
+            }
+
+            if (!bassSideHigher) continue;
+
+            for (var t = s + 1; t < voicing.StringCount; t++)
+            {
+                if (voicing.Strings[t].IsFretted && voicing.Strings[t].Fret > fret)
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool StretchOk(
@@ -301,8 +386,9 @@ public sealed class FingeringEngine
             fingers[s] = new FingerId(assignment[s]);
         }
 
-        // Validate no finger used on two different frets
+        // Validate no finger used on two different frets; multi-string fingers need a clear barre span
         var fingerFrets = new Dictionary<int, int>();
+        var fingerStrings = new Dictionary<int, List<int>>();
         for (var s = 0; s < fingers.Length; s++)
         {
             if (!fingers[s].IsAssigned) continue;
@@ -311,7 +397,26 @@ public sealed class FingeringEngine
             if (fingerFrets.TryGetValue(f, out var existing) && existing != fret)
                 return null;
             fingerFrets[f] = fret;
+            if (!fingerStrings.TryGetValue(f, out var list))
+            {
+                list = [];
+                fingerStrings[f] = list;
+            }
+            list.Add(s);
         }
+
+        foreach (var (finger, strings) in fingerStrings)
+        {
+            if (strings.Count < 2) continue;
+            var fret = fingerFrets[finger];
+            if (!BarreSpanClearOfLowerNotes(voicing, strings.Min(), strings.Max(), fret))
+                return null;
+        }
+
+        // A fretted note cannot sit behind a higher-fret "gate" on both sides
+        // (fingers further up the neck on lower AND higher strings trap it).
+        if (!NoNoteSandwichedBehindHigherFrets(voicing))
+            return null;
 
         // Crossing penalty / difficulty
         double difficulty = voicing.Span * 1.5;

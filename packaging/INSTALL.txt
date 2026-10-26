@@ -1,9 +1,9 @@
-Chord Search 1.0.2 - Windows x64
+Chord Search 1.0.3 - Windows x64
 ================================
 
 Option A - Installer (recommended)
 ----------------------------------
-Run ChordSearch-Setup-1.0.2.exe
+Run ChordSearch-Setup-1.0.3.exe
 - Pick the install folder
 - Start Menu shortcut + uninstaller are created
 - Remove via Windows Settings > Apps, or the Start Menu uninstall entry
