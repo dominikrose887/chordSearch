@@ -2,6 +2,7 @@
 bin/
 obj/
 logs/
+artifacts/
 .vs/
 *.user
 *.suo
