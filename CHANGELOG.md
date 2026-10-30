@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.6
+
+### Added
+- Settings → **Accidentals**: Sharp (C#) or Flat (Bb). Applies to chord names, pitch lists, root chips, fretboard labels, tuning editor, and bass options.
+- App version watermark in the bottom-right corner (`v1.0.6`).
+
+### Changed
+- Chord naming always follows the chosen accidental preference (no longer auto-flats certain roots).
+
 ## 1.0.5
 
 ### Added

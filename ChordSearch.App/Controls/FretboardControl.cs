@@ -44,6 +44,10 @@ public sealed class FretboardControl : UserControl
         DependencyProperty.Register(nameof(ChordTones), typeof(IReadOnlyList<PitchClass>), typeof(FretboardControl),
             new PropertyMetadata(null, OnVisualPropertyChanged));
 
+    public static readonly DependencyProperty AccidentalPreferenceProperty =
+        DependencyProperty.Register(nameof(AccidentalPreference), typeof(AccidentalPreference), typeof(FretboardControl),
+            new PropertyMetadata(AccidentalPreference.Sharp, OnVisualPropertyChanged));
+
     private const double PadLeft = 48;
     private const double PadRight = 10;
     private const double PadTop = 18;
@@ -125,6 +129,12 @@ public sealed class FretboardControl : UserControl
     {
         get => (IReadOnlyList<PitchClass>?)GetValue(ChordTonesProperty);
         set => SetValue(ChordTonesProperty, value);
+    }
+
+    public AccidentalPreference AccidentalPreference
+    {
+        get => (AccidentalPreference)GetValue(AccidentalPreferenceProperty);
+        set => SetValue(AccidentalPreferenceProperty, value);
     }
 
     private static void OnVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -427,7 +437,7 @@ public sealed class FretboardControl : UserControl
 
             var open = new TextBlock
             {
-                Text = tuning.OpenPitch(s).ToDisplayName(),
+                Text = tuning.OpenPitch(s).ToDisplayName(AccidentalPreference),
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromArgb(220, 220, 220, 220))
@@ -492,7 +502,7 @@ public sealed class FretboardControl : UserControl
             {
                 // Open string: same note circle at the nut (not a finger color)
                 var openR = Math.Clamp(FretGeometry.FretCellWidthMm(1, scale) * _pxPerMm * 0.34, 9, 14);
-                var openNote = PitchClassNames.ToDisplayName(tuning.OpenPitch(s).PitchClass);
+                var openNote = PitchClassNames.ToDisplayName(tuning.OpenPitch(s).PitchClass, AccidentalPreference);
                 var openCx = _neckLeft - openR - 2; // just left of the nut
                 DrawOpenNoteDot(openCx, y, openR, openNote);
                 continue;
@@ -509,7 +519,7 @@ public sealed class FretboardControl : UserControl
             string note;
             try
             {
-                note = PitchClassNames.ToDisplayName(tuning.PitchAt(s, fret).PitchClass);
+                note = PitchClassNames.ToDisplayName(tuning.PitchAt(s, fret).PitchClass, AccidentalPreference);
             }
             catch
             {
@@ -547,7 +557,7 @@ public sealed class FretboardControl : UserControl
 
                 var interval = IntervalFromRoot(root, pc);
                 var color = DegreeColor(interval);
-                var note = PitchClassNames.ToDisplayName(pc);
+                var note = PitchClassNames.ToDisplayName(pc, AccidentalPreference);
                 var isRoot = interval == 0;
 
                 if (fret == 0)

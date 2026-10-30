@@ -40,7 +40,7 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 ## Publish (release zip)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.5
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.6
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes.

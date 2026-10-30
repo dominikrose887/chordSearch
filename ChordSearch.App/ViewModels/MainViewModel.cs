@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ChordSearch.App.Diagnostics;
@@ -55,13 +56,8 @@ public partial class MainViewModel : ObservableObject
             _midi = new NullMidiPlayer();
         }
 
-        Roots =
-        [
-            new(PitchClass.C, "C"), new(PitchClass.Cs, "C#"), new(PitchClass.D, "D"),
-            new(PitchClass.Ds, "D#"), new(PitchClass.E, "E"), new(PitchClass.F, "F"),
-            new(PitchClass.Fs, "F#"), new(PitchClass.G, "G"), new(PitchClass.Gs, "G#"),
-            new(PitchClass.A, "A"), new(PitchClass.As, "A#"), new(PitchClass.B, "B")
-        ];
+        Roots = new ObservableCollection<ChipItem>(
+            Enum.GetValues<PitchClass>().Select(pc => new ChipItem(pc, PitchClassNames.ToDisplayName(pc))));
         Roots[0].IsSelected = true;
 
         Qualities =
@@ -96,7 +92,13 @@ public partial class MainViewModel : ObservableObject
         BassOptions = [];
         // Populated after chips exist via RebuildBassOptions()
 
-        PitchClassChoices = Enum.GetValues<PitchClass>().ToList();
+        PitchClassOptions = new ObservableCollection<PitchClassOption>(
+            Enum.GetValues<PitchClass>().Select(pc => new PitchClassOption(pc, PitchClassNames.ToDisplayName(pc))));
+        AccidentalChoices =
+        [
+            new AccidentalChoice(AccidentalPreference.Sharp, "Sharp — C#"),
+            new AccidentalChoice(AccidentalPreference.Flat, "Flat — Bb")
+        ];
         OctaveChoices = Enumerable.Range(0, 7).ToList();
 
         FretCountChoices = FretCountPresets.All
@@ -108,8 +110,11 @@ public partial class MainViewModel : ObservableObject
             _suppressSettingsPersist = true;
             MaxFrets = _settingsStore.Current.MaxFrets;
             ScaleLengthMm = _settingsStore.Current.ScaleLengthMm;
+            AccidentalPreference = _settingsStore.Current.AccidentalPreference;
+            SelectedAccidental = AccidentalChoices.First(c => c.Preference == AccidentalPreference);
             SelectedFretCount = FretCountChoices.FirstOrDefault(c => c.Frets == MaxFrets)
                                ?? FretCountChoices.Last();
+            RefreshPitchLabels();
             _suppressSettingsPersist = false;
 
             AppLog.Info($"MainViewModel ctor: settings MaxFrets={MaxFrets}, scale={ScaleLengthMm}mm");
@@ -155,9 +160,12 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<GuitarTuning> AvailableTunings { get; }
     public ObservableCollection<MidiDeviceInfo> MidiDevices { get; } = [];
     public ObservableCollection<TuningStringRow> TuningStrings { get; } = [];
-    public List<PitchClass> PitchClassChoices { get; }
+    public ObservableCollection<PitchClassOption> PitchClassOptions { get; }
+    public List<AccidentalChoice> AccidentalChoices { get; }
     public List<int> OctaveChoices { get; }
     public List<FretCountChoice> FretCountChoices { get; }
+
+    public string AppVersion { get; } = FormatAppVersion();
 
     private List<VoicingResult> _allResults = [];
 
@@ -178,6 +186,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial int MaxFrets { get; set; } = 24;
     [ObservableProperty] public partial double ScaleLengthMm { get; set; } = 648;
     [ObservableProperty] public partial FretCountChoice? SelectedFretCount { get; set; }
+    [ObservableProperty] public partial AccidentalPreference AccidentalPreference { get; set; } = AccidentalPreference.Sharp;
+    [ObservableProperty] public partial AccidentalChoice? SelectedAccidental { get; set; }
 
     [ObservableProperty] public partial bool FilterOpenPosition { get; set; }
     [ObservableProperty] public partial bool FilterNoBarre { get; set; }
@@ -671,8 +681,51 @@ public partial class MainViewModel : ObservableObject
         {
             Root = root,
             Quality = quality,
-            Bass = bass
+            Bass = bass,
+            AccidentalPreference = AccidentalPreference
         }.WithExtensions(exts);
+    }
+
+    partial void OnSelectedAccidentalChanged(AccidentalChoice? value)
+    {
+        if (value is null || _suppressSettingsPersist) return;
+        if (AccidentalPreference == value.Preference) return;
+        AccidentalPreference = value.Preference;
+    }
+
+    partial void OnAccidentalPreferenceChanged(AccidentalPreference value)
+    {
+        if (_suppressSettingsPersist) return;
+
+        _settingsStore.Current.AccidentalPreference = value;
+        try { _settingsStore.Save(); }
+        catch (Exception ex) { AppLog.Error("Settings save failed", ex); }
+
+        if (SelectedAccidental?.Preference != value)
+            SelectedAccidental = AccidentalChoices.First(c => c.Preference == value);
+
+        RefreshPitchLabels();
+        ReloadTuningEditorRows();
+        RebuildBassOptions();
+        _ = RunSearchAsync();
+    }
+
+    private void RefreshPitchLabels()
+    {
+        foreach (var chip in Roots)
+        {
+            if (chip.Value is PitchClass pc)
+                chip.Label = PitchClassNames.ToDisplayName(pc, AccidentalPreference);
+        }
+
+        foreach (var opt in PitchClassOptions)
+            opt.Label = PitchClassNames.ToDisplayName(opt.PitchClass, AccidentalPreference);
+    }
+
+    private static string FormatAppVersion()
+    {
+        var v = Assembly.GetExecutingAssembly().GetName().Version;
+        return v is null ? "v?" : $"v{v.Major}.{v.Minor}.{v.Build}";
     }
 
     private async Task RunSearchAsync()
@@ -863,12 +916,11 @@ public partial class MainViewModel : ObservableObject
         for (var i = 0; i < ActiveTuning.StringCount; i++)
         {
             var p = ActiveTuning.OpenPitch(i);
-            TuningStrings.Add(new TuningStringRow
+            TuningStrings.Add(new TuningStringRow(PitchClassOptions, AccidentalPreference)
             {
                 StringNumber = i + 1,
                 PitchClass = p.PitchClass,
-                Octave = p.Octave,
-                Display = p.ToDisplayName()
+                Octave = p.Octave
             });
         }
     }
@@ -897,9 +949,39 @@ public sealed class FretCountChoice(int frets, string label)
     public override string ToString() => Label;
 }
 
+public sealed class AccidentalChoice(AccidentalPreference preference, string label)
+{
+    public AccidentalPreference Preference { get; } = preference;
+    public string Label { get; } = label;
+    public override string ToString() => Label;
+}
+
+public partial class PitchClassOption : ObservableObject
+{
+    public PitchClassOption(PitchClass pitchClass, string label)
+    {
+        PitchClass = pitchClass;
+        Label = label;
+    }
+
+    public PitchClass PitchClass { get; }
+
+    [ObservableProperty] public partial string Label { get; set; } = "";
+
+    public override string ToString() => Label;
+}
+
 public partial class TuningStringRow : ObservableObject
 {
-    public IReadOnlyList<PitchClass> PitchClassOptions { get; } = Enum.GetValues<PitchClass>();
+    public TuningStringRow(ObservableCollection<PitchClassOption> pitchClassOptions, AccidentalPreference preference)
+    {
+        PitchClassOptions = pitchClassOptions;
+        _preference = preference;
+    }
+
+    private AccidentalPreference _preference;
+
+    public ObservableCollection<PitchClassOption> PitchClassOptions { get; }
 
     [ObservableProperty] public partial int StringNumber { get; set; }
     [ObservableProperty] public partial PitchClass PitchClass { get; set; }
@@ -912,6 +994,12 @@ public partial class TuningStringRow : ObservableObject
         set => Octave = (int)Math.Round(value);
     }
 
+    public void SetPreference(AccidentalPreference preference)
+    {
+        _preference = preference;
+        RefreshDisplay();
+    }
+
     partial void OnPitchClassChanged(PitchClass value) => RefreshDisplay();
     partial void OnOctaveChanged(int value)
     {
@@ -920,5 +1008,5 @@ public partial class TuningStringRow : ObservableObject
     }
 
     private void RefreshDisplay()
-        => Display = Pitch.FromNote(PitchClass, Octave).ToDisplayName();
+        => Display = Pitch.FromNote(PitchClass, Octave).ToDisplayName(_preference);
 }

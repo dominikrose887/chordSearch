@@ -16,7 +16,7 @@
         <converters:StringPrefixConverter x:Key="StringPrefix" />
     </Page.Resources>
 
-    <Grid RowSpacing="0">
+    <Grid x:Name="RootGrid" RowSpacing="0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -162,7 +162,7 @@
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             FontWeight="SemiBold"
-                                            Text="{x:Bind Label}" />
+                                            Text="{x:Bind Label, Mode=OneWay}" />
                                     </Border>
                                 </DataTemplate>
                             </GridView.ItemTemplate>
@@ -313,6 +313,7 @@
                             Grid.Row="1"
                             Height="220"
                             HorizontalAlignment="Stretch"
+                            AccidentalPreference="{x:Bind ViewModel.AccidentalPreference, Mode=OneWay}"
                             ChordRoot="{x:Bind ViewModel.ChordRoot, Mode=OneWay}"
                             ChordTones="{x:Bind ViewModel.ChordTones, Mode=OneWay}"
                             MaxFret="{x:Bind ViewModel.MaxFrets, Mode=OneWay}"
@@ -415,6 +416,15 @@
             PrimaryButtonClick="SettingsDialog_PrimaryClick">
             <ScrollViewer MaxHeight="520" VerticalScrollBarVisibility="Auto">
                 <StackPanel Width="420" Spacing="14">
+                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Notation" />
+                    <ComboBox
+                        MinWidth="280"
+                        DisplayMemberPath="Label"
+                        Header="Accidentals"
+                        ItemsSource="{x:Bind ViewModel.AccidentalChoices}"
+                        SelectedItem="{x:Bind ViewModel.SelectedAccidental, Mode=TwoWay}"
+                        ToolTipService.ToolTip="How notes are spelled everywhere: C# vs Db, F# vs Gb, …" />
+
                     <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Neck" />
                     <ComboBox
                         MinWidth="280"
@@ -474,8 +484,10 @@
                                         Text="{x:Bind StringNumber, Mode=OneWay, Converter={StaticResource StringPrefix}}" />
                                     <ComboBox
                                         Grid.Column="1"
+                                        DisplayMemberPath="Label"
                                         ItemsSource="{x:Bind PitchClassOptions}"
-                                        SelectedItem="{x:Bind PitchClass, Mode=TwoWay}" />
+                                        SelectedValue="{x:Bind PitchClass, Mode=TwoWay}"
+                                        SelectedValuePath="PitchClass" />
                                     <NumberBox
                                         Grid.Column="2"
                                         Maximum="6"
@@ -513,5 +525,15 @@
                 </StackPanel>
             </ScrollViewer>
         </ContentDialog>
+
+        <TextBlock
+            Grid.RowSpan="2"
+            Margin="0,0,12,8"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            FontSize="11"
+            IsHitTestVisible="False"
+            Opacity="0.45"
+            Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}" />
     </Grid>
 </Page>

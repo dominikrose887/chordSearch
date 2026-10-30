@@ -11,7 +11,9 @@ public partial class ChipItem : ObservableObject
     }
 
     public object Value { get; }
-    public string Label { get; }
+
+    [ObservableProperty]
+    public partial string Label { get; set; } = "";
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }

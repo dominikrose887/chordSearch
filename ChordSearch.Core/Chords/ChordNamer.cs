@@ -6,7 +6,7 @@ public static class ChordNamer
 {
     public static string Name(ChordSpec spec)
     {
-        var root = PitchClassNames.ToDisplayName(spec.Root, PreferFlats(spec));
+        var root = PitchClassNames.ToDisplayName(spec.Root, spec.AccidentalPreference);
         var quality = ChordQualityInfo.Symbol(spec.Quality);
 
         var extParts = new List<string>();
@@ -60,7 +60,7 @@ public static class ChordNamer
         var name = root + quality + string.Concat(extParts);
 
         if (spec.Bass is { } bass && bass != spec.Root)
-            name += "/" + PitchClassNames.ToDisplayName(bass, PreferFlats(spec));
+            name += "/" + PitchClassNames.ToDisplayName(bass, spec.AccidentalPreference);
 
         return name;
     }
@@ -74,13 +74,5 @@ public static class ChordNamer
     {
         if (exts.Contains(e))
             parts.Add("(" + ChordQualityInfo.Symbol(e) + ")");
-    }
-
-    private static AccidentalPreference PreferFlats(ChordSpec spec)
-    {
-        // Flat keys often prefer flats for root
-        return spec.Root is PitchClass.F or PitchClass.As or PitchClass.Ds or PitchClass.Gs or PitchClass.Cs
-            ? AccidentalPreference.Flat
-            : spec.AccidentalPreference;
     }
 }

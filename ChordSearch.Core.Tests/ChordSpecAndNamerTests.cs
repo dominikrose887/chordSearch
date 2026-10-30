@@ -126,6 +126,29 @@ public class ChordSpecAndNamerTests
     }
 
     [Fact]
+    public void AccidentalPreference_ControlsSpelling()
+    {
+        var sharp = new ChordSpec
+        {
+            Root = PitchClass.As,
+            Quality = ChordQuality.Major,
+            AccidentalPreference = AccidentalPreference.Sharp
+        };
+        var flat = sharp.WithPreference(AccidentalPreference.Flat);
+
+        Assert.Equal("A#", sharp.DisplayName);
+        Assert.Equal("Bb", flat.DisplayName);
+
+        var slashFlat = new ChordSpec
+        {
+            Root = PitchClass.D,
+            Bass = PitchClass.Fs,
+            AccidentalPreference = AccidentalPreference.Flat
+        };
+        Assert.Equal("D/Gb", slashFlat.DisplayName);
+    }
+
+    [Fact]
     public void Formula_PowerChord_OnlyRootAndFifth()
     {
         var formula = ChordFormula.FromSpec(new ChordSpec { Root = PitchClass.A, Quality = ChordQuality.Power });

@@ -2,7 +2,7 @@
 
 Personal desktop tool for building guitar chords, finding playable voicings across the neck, inspecting fingerings on a fretboard, and previewing them over MIDI.
 
-**Version:** 1.0.5  
+**Version:** 1.0.6  
 **Platform:** Windows 10/11 (x64), unpackaged WinUI 3 app  
 **Audience:** solo / personal use (not an enterprise-deployed product)
 
@@ -15,6 +15,7 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 - Qualities: major, minor, dim, aug, sus2, sus4, power (5).
 - Extensions: 6, 7, maj7, 9, 11, 13, add9, b5/#5, b9/#9, #11, b13 — with conflict resolution (e.g. 7 vs maj7).
 - Slash / alternate bass limited to **chord tones** (invalid bass rejected before search).
+- **Accidentals** (Settings): Sharp or Flat spelling for every note/chord name in the UI.
 
 ### Voicing search
 - Sliding fret-window search across the neck (default max fret 12–24).
@@ -52,6 +53,7 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 - Local crash / exception logging under `%LocalAppData%\ChordSearch\logs` (rotated, keeps last 20 files).
 - Settings recover from corrupt JSON and rewrite defaults.
 - Atomic writes for settings and tunings (temp file + replace).
+- Quiet version label (`vX.Y.Z`) in the bottom-right corner.
 
 ---
 
@@ -64,7 +66,7 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 | MVVM | **CommunityToolkit.Mvvm** | Source generators, relay commands |
 | Domain | **ChordSearch.Core** (pure .NET) | No UI references — fully unit-testable |
 | MIDI | **NAudio** 2.2.1 | `MidiOut` only |
-| Tests | **xUnit** (`ChordSearch.Core.Tests`) | Domain coverage (~150 tests) |
+| Tests | **xUnit** (`ChordSearch.Core.Tests`) | Domain coverage (~153 tests) |
 | Packaging | Self-contained **win-x64** publish | No MSIX / Store requirement for v1 |
 
 ### Solution layout
@@ -91,7 +93,7 @@ ChordSearch.slnx
 | Fingering | `FingeringEngine` | Finger assignment / rejection |
 | Services | `ChordSearchService` | Facade: options snapshot, search, ranking |
 | Tuning | `GuitarTuning`, `TuningPresets`, `TuningStore` | Presets + user JSON store |
-| Settings | `AppSettings`, `AppSettingsStore` | Max frets, scale length, MIDI prefs |
+| Settings | `AppSettings`, `AppSettingsStore` | Max frets, scale length, MIDI prefs, accidental preference |
 | I/O | `AtomicFile` | Crash-safe text writes |
 
 **Search path:** `ChordSpec` → `ChordFormula` → `VoicingEngine.FindVoicings` → `FingeringEngine.Assign` → ranked `VoicingResult` list.  
@@ -189,15 +191,15 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 Build installer + portable zip (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.5
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.6
 ```
 
 Artifacts under `artifacts\`:
 
 | File | Purpose |
 |------|---------|
-| `ChordSearch-Setup-1.0.5.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
-| `ChordSearch-1.0.5-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
+| `ChordSearch-Setup-1.0.6.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
+| `ChordSearch-1.0.6-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
 
 ### Installed vs portable data
 

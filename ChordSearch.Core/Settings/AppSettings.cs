@@ -1,3 +1,5 @@
+using ChordSearch.Core.Music;
+
 namespace ChordSearch.Core.Settings;
 
 public sealed class AppSettings
@@ -14,6 +16,9 @@ public sealed class AppSettings
     /// <summary>MIDI note velocity 1–127.</summary>
     public int MidiVelocity { get; set; } = 90;
 
+    /// <summary>Spell accidentals as sharps (C#) or flats (Bb) across the UI.</summary>
+    public AccidentalPreference AccidentalPreference { get; set; } = AccidentalPreference.Sharp;
+
     public void Clamp()
     {
         MaxFrets = Math.Clamp(MaxFrets, 12, 24);
@@ -22,6 +27,8 @@ public sealed class AppSettings
         MidiVelocity = Math.Clamp(MidiVelocity, 1, 127);
         if (MidiDeviceIndex < -1)
             MidiDeviceIndex = -1;
+        if (AccidentalPreference is not AccidentalPreference.Sharp and not AccidentalPreference.Flat)
+            AccidentalPreference = AccidentalPreference.Sharp;
     }
 }
 
