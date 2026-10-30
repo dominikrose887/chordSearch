@@ -33,6 +33,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
@@ -58,6 +59,39 @@
                 Orientation="Horizontal"
                 Spacing="8"
                 VerticalAlignment="Center">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Opacity="0.7"
+                    Text="Tuning" />
+                <ComboBox
+                    MinWidth="160"
+                    DisplayMemberPath="Name"
+                    ItemsSource="{x:Bind ViewModel.AvailableTunings}"
+                    SelectedItem="{x:Bind ViewModel.ActiveTuning, Mode=TwoWay}"
+                    VerticalAlignment="Center" />
+                <Button
+                    Command="{x:Bind ViewModel.SelectStandardStringCountCommand}"
+                    CommandParameter="4"
+                    Content="4"
+                    ToolTipService.ToolTip="Bass standard — EADG" />
+                <Button
+                    Command="{x:Bind ViewModel.SelectStandardStringCountCommand}"
+                    CommandParameter="6"
+                    Content="6"
+                    ToolTipService.ToolTip="Standard E — EADGBE" />
+                <Button
+                    Command="{x:Bind ViewModel.SelectStandardStringCountCommand}"
+                    CommandParameter="7"
+                    Content="7"
+                    ToolTipService.ToolTip="7-string standard — BEADGBE" />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="2"
+                Orientation="Horizontal"
+                Spacing="8"
+                VerticalAlignment="Center">
                 <Button
                     Command="{x:Bind ViewModel.PlayChordCommand}"
                     Content="Play"
@@ -67,7 +101,7 @@
             </StackPanel>
 
             <Button
-                Grid.Column="2"
+                Grid.Column="3"
                 Click="SettingsButton_Click"
                 Content="Settings"
                 VerticalAlignment="Center" />
@@ -248,9 +282,27 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <Grid Margin="2,0,2,8">
-                            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Fretboard" />
+                        <Grid Margin="2,0,2,8" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock
+                                Style="{StaticResource SubtitleTextBlockStyle}"
+                                Text="Fretboard"
+                                VerticalAlignment="Center" />
+                            <ToggleSwitch
+                                Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Header="All chord tones"
+                                IsOn="{x:Bind ViewModel.ShowAllChordTones, Mode=TwoWay}"
+                                OffContent="Voicing only"
+                                OnContent="Show map"
+                                MinWidth="0" />
+                            <TextBlock
+                                Grid.Column="2"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Opacity="0.65"
@@ -259,11 +311,14 @@
                         <controls:FretboardControl
                             x:Name="Fretboard"
                             Grid.Row="1"
-                            Height="200"
+                            Height="220"
                             HorizontalAlignment="Stretch"
+                            ChordRoot="{x:Bind ViewModel.ChordRoot, Mode=OneWay}"
+                            ChordTones="{x:Bind ViewModel.ChordTones, Mode=OneWay}"
                             MaxFret="{x:Bind ViewModel.MaxFrets, Mode=OneWay}"
                             Result="{x:Bind ViewModel.SelectedResult, Mode=OneWay}"
                             ScaleLengthMm="{x:Bind ViewModel.ScaleLengthMm, Mode=OneWay}"
+                            ShowAllChordTones="{x:Bind ViewModel.ShowAllChordTones, Mode=OneWay}"
                             Tuning="{x:Bind ViewModel.ActiveTuning, Mode=OneWay}" />
                     </Grid>
                 </Border>
@@ -388,6 +443,11 @@
                         SpinButtonPlacementMode="Inline"
                         Value="{x:Bind ViewModel.StringCount, Mode=TwoWay}" />
                     <Button Command="{x:Bind ViewModel.ApplyStringCountCommand}" Content="Apply string count" />
+                    <TextBlock
+                        FontSize="12"
+                        Opacity="0.65"
+                        Text="4 → EADG · 6 → EADGBE · 7 → BEADGBE (standards). Other counts keep current pitches."
+                        TextWrapping="WrapWholeWords" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button
                             Command="{x:Bind ViewModel.TransposeTuningDownCommand}"

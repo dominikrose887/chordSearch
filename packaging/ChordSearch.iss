@@ -3,7 +3,7 @@
 ; Expects published files in artifacts\publish-win-x64\
 
 #define MyAppName "Chord Search"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "Chord Search"
 #define MyAppExeName "ChordSearch.App.exe"
 #define MyAppURL "https://github.com/dominikrose887/chordSearch"

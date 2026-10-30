@@ -183,6 +183,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool FilterNoBarre { get; set; }
     [ObservableProperty] public partial bool FilterMaxThreeFingers { get; set; }
 
+    [ObservableProperty] public partial bool ShowAllChordTones { get; set; }
+    [ObservableProperty] public partial PitchClass ChordRoot { get; set; } = PitchClass.C;
+    [ObservableProperty] public partial IReadOnlyList<PitchClass> ChordTones { get; set; } = [];
+
     partial void OnSelectedMidiDeviceChanged(MidiDeviceInfo? value)
     {
         try
@@ -497,18 +501,54 @@ public partial class MainViewModel : ObservableObject
     {
         var count = Math.Clamp(StringCount, 4, 8);
         StringCount = count;
-        if (ActiveTuning.StringCount != count)
+        if (ActiveTuning is null || ActiveTuning.StringCount == count)
+            return;
+
+        // Snap to the usual standard tuning for 4 / 6 / 7 strings.
+        GuitarTuning? standard = count switch
         {
-            var pitches = ActiveTuning.OpenStrings.ToList();
-            var fill = pitches.Count > 0 ? pitches[0] : Pitch.FromNote(PitchClass.E, 2);
-            while (pitches.Count < count)
-                pitches.Insert(0, fill);
-            while (pitches.Count > count)
-                pitches.RemoveAt(0);
-            var updated = new GuitarTuning(ActiveTuning.Name, pitches, ActiveTuning.Id);
-            ReplaceTuningInList(updated);
-            ActiveTuning = updated;
+            4 => TuningPresets.BassStandard,
+            6 => TuningPresets.StandardE,
+            7 => TuningPresets.SevenStringStandard,
+            _ => null
+        };
+
+        if (standard is not null)
+        {
+            var existing = AvailableTunings.FirstOrDefault(t => t.Id == standard.Id);
+            if (existing is null)
+            {
+                existing = standard.Copy();
+                AvailableTunings.Insert(0, existing);
+            }
+
+            ActiveTuning = existing;
+            return;
         }
+
+        // 5 / 8 strings: keep pitch content, pad or trim from the low end.
+        var pitches = ActiveTuning.OpenStrings.ToList();
+        var fill = pitches.Count > 0 ? pitches[0] : Pitch.FromNote(PitchClass.E, 2);
+        while (pitches.Count < count)
+            pitches.Insert(0, fill);
+        while (pitches.Count > count)
+            pitches.RemoveAt(0);
+        var updated = new GuitarTuning(ActiveTuning.Name, pitches, ActiveTuning.Id);
+        ReplaceTuningInList(updated);
+        ActiveTuning = updated;
+    }
+
+    [RelayCommand]
+    private void SelectStandardStringCount(object? parameter)
+    {
+        var count = parameter switch
+        {
+            int i => i,
+            string s when int.TryParse(s, out var n) => n,
+            _ => 6
+        };
+        StringCount = Math.Clamp(count, 4, 8);
+        ApplyStringCount();
     }
 
     [RelayCommand]
@@ -686,6 +726,8 @@ public partial class MainViewModel : ObservableObject
                 TheorySummary = response.TheorySummary;
                 PitchClassText = string.Join(" · ", response.PitchClasses);
                 IntervalText = string.Join(", ", response.Intervals.Select(i => i.ToString()));
+                ChordRoot = response.Formula.Root;
+                ChordTones = response.Formula.PitchClasses.OrderBy(pc => ((int)pc - (int)response.Formula.Root + 12) % 12).ToArray();
 
                 _allResults = response.Results.ToList();
                 ApplyVoicingFilters();

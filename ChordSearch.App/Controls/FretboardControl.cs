@@ -32,6 +32,18 @@ public sealed class FretboardControl : UserControl
         DependencyProperty.Register(nameof(ScaleLengthMm), typeof(double), typeof(FretboardControl),
             new PropertyMetadata(FretGeometry.StandardScaleLengthMm, OnVisualPropertyChanged));
 
+    public static readonly DependencyProperty ShowAllChordTonesProperty =
+        DependencyProperty.Register(nameof(ShowAllChordTones), typeof(bool), typeof(FretboardControl),
+            new PropertyMetadata(false, OnVisualPropertyChanged));
+
+    public static readonly DependencyProperty ChordRootProperty =
+        DependencyProperty.Register(nameof(ChordRoot), typeof(PitchClass), typeof(FretboardControl),
+            new PropertyMetadata(PitchClass.C, OnVisualPropertyChanged));
+
+    public static readonly DependencyProperty ChordTonesProperty =
+        DependencyProperty.Register(nameof(ChordTones), typeof(IReadOnlyList<PitchClass>), typeof(FretboardControl),
+            new PropertyMetadata(null, OnVisualPropertyChanged));
+
     private const double PadLeft = 48;
     private const double PadRight = 10;
     private const double PadTop = 18;
@@ -97,6 +109,24 @@ public sealed class FretboardControl : UserControl
         set => SetValue(ScaleLengthMmProperty, value);
     }
 
+    public bool ShowAllChordTones
+    {
+        get => (bool)GetValue(ShowAllChordTonesProperty);
+        set => SetValue(ShowAllChordTonesProperty, value);
+    }
+
+    public PitchClass ChordRoot
+    {
+        get => (PitchClass)GetValue(ChordRootProperty);
+        set => SetValue(ChordRootProperty, value);
+    }
+
+    public IReadOnlyList<PitchClass>? ChordTones
+    {
+        get => (IReadOnlyList<PitchClass>?)GetValue(ChordTonesProperty);
+        set => SetValue(ChordTonesProperty, value);
+    }
+
     private static void OnVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((FretboardControl)d).Redraw();
 
@@ -121,9 +151,61 @@ public sealed class FretboardControl : UserControl
         _ => "?"
     };
 
+    /// <summary>Stable color per chord degree (semitones above root, 0–11).</summary>
+    private static Color DegreeColor(int semitones) => (semitones % 12) switch
+    {
+        0 => Color.FromArgb(255, 220, 70, 70),     // 1 / root — red
+        1 => Color.FromArgb(255, 244, 114, 182),   // b2 — pink
+        2 => Color.FromArgb(255, 251, 146, 60),    // 2 — orange
+        3 => Color.FromArgb(255, 234, 179, 8),     // b3 — gold
+        4 => Color.FromArgb(255, 34, 197, 94),     // 3 — green
+        5 => Color.FromArgb(255, 45, 212, 191),    // 4 — teal
+        6 => Color.FromArgb(255, 56, 189, 248),    // b5 — sky
+        7 => Color.FromArgb(255, 59, 130, 246),    // 5 — blue
+        8 => Color.FromArgb(255, 129, 140, 248),   // #5 — indigo
+        9 => Color.FromArgb(255, 168, 85, 247),    // 6 — purple
+        10 => Color.FromArgb(255, 217, 70, 239),   // b7 — fuchsia
+        11 => Color.FromArgb(255, 244, 63, 94),    // 7 — rose
+        _ => Color.FromArgb(255, 120, 120, 120)
+    };
+
+    private static string DegreeLabel(int semitones) => (semitones % 12) switch
+    {
+        0 => "1 — root",
+        1 => "b2",
+        2 => "2",
+        3 => "b3",
+        4 => "3",
+        5 => "4",
+        6 => "b5 / #11",
+        7 => "5",
+        8 => "#5 / b13",
+        9 => "6 / bb7",
+        10 => "b7",
+        11 => "7",
+        _ => semitones.ToString()
+    };
+
+    private static int IntervalFromRoot(PitchClass root, PitchClass tone)
+        => ((int)tone - (int)root + 12) % 12;
+
     private void BuildLegend()
     {
         _legend.Children.Clear();
+
+        if (ShowAllChordTones)
+        {
+            var tones = ChordTones;
+            if (tones is { Count: > 0 })
+            {
+                var root = ChordRoot;
+                foreach (var pc in tones.OrderBy(pc => IntervalFromRoot(root, pc)))
+                    _legend.Children.Add(LegendItem(DegreeColor(IntervalFromRoot(root, pc)), DegreeLabel(IntervalFromRoot(root, pc))));
+            }
+
+            return;
+        }
+
         for (var f = 1; f <= 4; f++)
             _legend.Children.Add(LegendItem(FingerColor(f), FingerLabel(f)));
 
@@ -353,15 +435,21 @@ public sealed class FretboardControl : UserControl
             CenterText(open, _neckLeft / 2, y - 8);
         }
 
-        var result = Result;
-        if (result is null)
-            return;
+        BuildLegend();
 
-        if (result.Voicing.StringCount != stringCount)
+        if (ShowAllChordTones)
         {
-            AppLog.Warn("Fretboard: voicing/tuning string mismatch");
+            DrawAllChordTones(tuning, stringCount, maxFret, scale);
             return;
         }
+
+        var result = Result;
+        var voicingMatches = result is not null && result.Voicing.StringCount == stringCount;
+        if (result is not null && !voicingMatches)
+            AppLog.Warn("Fretboard: voicing/tuning string mismatch");
+
+        if (!voicingMatches || result is null)
+            return;
 
         foreach (var barre in result.Fingering.Barres)
         {
@@ -430,6 +518,69 @@ public sealed class FretboardControl : UserControl
 
             DrawFingerNoteDot(cx, y, r, finger, note);
         }
+    }
+
+    private void DrawAllChordTones(
+        GuitarTuning tuning,
+        int stringCount,
+        int maxFret,
+        double scale)
+    {
+        var tones = ChordTones;
+        if (tones is null || tones.Count == 0)
+            return;
+
+        var toneSet = tones as HashSet<PitchClass> ?? tones.ToHashSet();
+        var root = ChordRoot;
+
+        for (var s = 0; s < stringCount; s++)
+        {
+            var y = StringY(s, stringCount);
+            for (var fret = 0; fret <= maxFret; fret++)
+            {
+                PitchClass pc;
+                try { pc = tuning.PitchAt(s, fret).PitchClass; }
+                catch { continue; }
+
+                if (!toneSet.Contains(pc))
+                    continue;
+
+                var interval = IntervalFromRoot(root, pc);
+                var color = DegreeColor(interval);
+                var note = PitchClassNames.ToDisplayName(pc);
+                var isRoot = interval == 0;
+
+                if (fret == 0)
+                {
+                    var r = Math.Clamp(FretGeometry.FretCellWidthMm(1, scale) * _pxPerMm * 0.30, 8, 12);
+                    var cx = _neckLeft - r - 2;
+                    DrawChordToneDot(cx, y, r, color, note, isRoot);
+                }
+                else
+                {
+                    var cx = FretCellCenterX(fret, scale);
+                    var cellW = FretGeometry.FretCellWidthMm(fret, scale) * _pxPerMm;
+                    var r = Math.Clamp(cellW * 0.36, 8, 14);
+                    DrawChordToneDot(cx, y, r, color, note, isRoot);
+                }
+            }
+        }
+    }
+
+    private void DrawChordToneDot(double cx, double cy, double r, Color fill, string noteName, bool isRoot)
+    {
+        Place(new Ellipse
+        {
+            Width = r * 2,
+            Height = r * 2,
+            Fill = new SolidColorBrush(fill),
+            Stroke = new SolidColorBrush(isRoot
+                ? Color.FromArgb(255, 255, 220, 180)
+                : Color.FromArgb(200, 255, 255, 255)),
+            StrokeThickness = isRoot ? 2.0 : 1.2
+        }, cx - r, cy - r);
+
+        DrawCenteredNoteLabel(cx, cy, r, noteName, Colors.White);
     }
 
     private void DrawOpenNoteDot(double cx, double cy, double r, string noteName)

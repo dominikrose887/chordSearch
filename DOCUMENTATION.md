@@ -2,7 +2,7 @@
 
 Personal desktop tool for building guitar chords, finding playable voicings across the neck, inspecting fingerings on a fretboard, and previewing them over MIDI.
 
-**Version:** 1.0.4  
+**Version:** 1.0.5  
 **Platform:** Windows 10/11 (x64), unpackaged WinUI 3 app  
 **Audience:** solo / personal use (not an enterprise-deployed product)
 
@@ -30,12 +30,16 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 
 ### Fretboard & diagrams
 - Interactive fretboard: inlays, X/O, finger numbers, barre bars, note names.
+- **Voicing only** mode: selected shape with finger-colored dots, barres, mute marks.
+- **All chord tones** (map) mode: every chord tone across the neck, colored by degree (1 / b3 / 5 / b7 …); legend lists degrees instead of fingers.
 - Grid of voicing diagrams for the current result set.
 - Click a fretted note to hear that pitch (when MIDI is available).
 
 ### Tuning
-- 4–8 strings; per-string pitch class + octave.
-- Built-in presets (Standard E, Drop D, Open G/D, half-step down, bass, 7-string).
+- Top-bar preset picker plus quick **4 / 6 / 7** buttons for standard tunings (EADG, EADGBE, BEADGBE).
+- 4–8 strings; per-string pitch class + octave in Settings.
+- Built-in presets (Standard E, Standard C, Drop D, Open G/D, half-step down, bass, 7-string).
+- Applying string count 4 / 6 / 7 selects that standard; 5 / 8 pad or trim the current pitches.
 - User tunings saved as JSON; active tuning persisted across launches.
 - Transpose ±1 semitone without mutating built-in presets (working copies only).
 
@@ -60,7 +64,7 @@ Personal desktop tool for building guitar chords, finding playable voicings acro
 | MVVM | **CommunityToolkit.Mvvm** | Source generators, relay commands |
 | Domain | **ChordSearch.Core** (pure .NET) | No UI references — fully unit-testable |
 | MIDI | **NAudio** 2.2.1 | `MidiOut` only |
-| Tests | **xUnit** (`ChordSearch.Core.Tests`) | Domain coverage (~140 tests) |
+| Tests | **xUnit** (`ChordSearch.Core.Tests`) | Domain coverage (~150 tests) |
 | Packaging | Self-contained **win-x64** publish | No MSIX / Store requirement for v1 |
 
 ### Solution layout
@@ -98,7 +102,7 @@ ChordSearch.slnx
 | Piece | Role |
 |-------|------|
 | `MainViewModel` | Builder state, search orchestration, tuning editor, MIDI commands |
-| `FretboardControl` / `VoicingDiagramControl` | Canvas-drawn diagrams |
+| `FretboardControl` / `VoicingDiagramControl` | Canvas-drawn diagrams; fretboard supports voicing + degree map modes |
 | `AppLog` | Session file logger + prune |
 | `App` / `MainWindow` | Lifecycle, unhandled-exception hooks, MIDI dispose on close |
 
@@ -185,15 +189,15 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 Build installer + portable zip (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.4
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.5
 ```
 
 Artifacts under `artifacts\`:
 
 | File | Purpose |
 |------|---------|
-| `ChordSearch-Setup-1.0.4.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
-| `ChordSearch-1.0.4-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
+| `ChordSearch-Setup-1.0.5.exe` | Wizard installer (choose folder, Start Menu, Add/Remove Programs uninstall) |
+| `ChordSearch-1.0.5-win-x64-portable.zip` | No-install portable; includes `portable.txt` so data lives in `.\Data` |
 
 ### Installed vs portable data
 

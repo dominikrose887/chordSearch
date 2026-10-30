@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.5
+
+### Added
+- **All chord tones** fretboard mode: toggle shows every chord tone on the neck with note names; each degree gets its own color (root, 3, 5, b7, …).
+- Degree legend under the fretboard in map mode (replaces finger legend while the map is on).
+- Tuning selector moved to the top bar for quick access.
+- Quick string-count buttons **4 / 6 / 7** snap to standard tunings: EADG, EADGBE, BEADGBE.
+
+### Changed
+- Applying string count 4 / 6 / 7 now selects the matching standard preset instead of padding/trimming the current pitches.
+
 ## 1.0.4
 
 ### Changed

@@ -33,14 +33,14 @@ dotnet run --project ChordSearch.App/ChordSearch.App.csproj -c Debug -p:Platform
 - **Chord builder**: Root → Quality → Extensions → Bass (no giant chord-name dropdown)
 - **Voicing search**: full-neck windowed search with span/bass/coverage scoring
 - **Fingering**: barre detection, stretch limits, adjacent-finger rules
-- **Fretboard**: inlays, X/O, finger numbers, barre bars, note names
-- **Tuning**: 4–8 strings, per-string pitch/octave, presets, JSON save under `%LocalAppData%\ChordSearch\tunings`
+- **Fretboard**: voicing mode (finger colors) or **all chord tones** map (degree colors + note names)
+- **Tuning**: top-bar picker; 4/6/7 → EADG / EADGBE / BEADGBE; full editor in Settings; JSON under `%LocalAppData%\ChordSearch\tunings`
 - **MIDI**: chord strum, arpeggio, device picker, velocity
 
 ## Publish (release zip)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.4
+powershell -ExecutionPolicy Bypass -File packaging\build-release.ps1 -Version 1.0.5
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes.
